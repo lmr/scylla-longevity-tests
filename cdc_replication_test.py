@@ -239,25 +239,24 @@ class CDCReplicationTest(ClusterTester):
         replicator_log_path = os.path.join(self.logdir, 'replicator.log')
         loader_node.remoter.receive_files(src='replicatorlog', dst=replicator_log_path)
 
-        migrate_log_path = None
-        migrate_ok = True
+        self.log.info('Comparing table contents using scylla-migrate...')
+        res = loader_node.remoter.run(cmd='./scylla-migrate check --master-address {} --replica-address {}'
+                                      ' --ignore-schema-difference {} {}.{} 2>&1 | tee migratelog'.format(
+                                          master_node.external_address, replica_node.external_address,
+                                          # Timestamps don't have to match in postimage mode
+                                          '--no-writetime' if mode == Mode.POSTIMAGE else '',
+                                          self.KS_NAME, self.TABLE_NAME))
+        migrate_ok = res.ok
+
+        migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
+        loader_node.remoter.receive_files(src='migratelog', dst=migrate_log_path)
+        with open(migrate_log_path) as file:
+            self.consistency_ok = 'Consistency check OK.\n' in (line for line in file)
+
         if mode == Mode.PREIMAGE:
             with open(replicator_log_path) as file:
-                self.consistency_ok = not 'Inconsistency detected.\n' in (line for line in file)
-        else:
-            self.log.info('Comparing table contents using scylla-migrate...')
-            res = loader_node.remoter.run(cmd='./scylla-migrate check --master-address {} --replica-address {}'
-                                          ' --ignore-schema-difference {} {}.{} 2>&1 | tee migratelog'.format(
-                                              master_node.external_address, replica_node.external_address,
-                                              # Timestamps don't have to match in postimage mode
-                                              '--no-writetime' if mode == Mode.POSTIMAGE else '',
-                                              self.KS_NAME, self.TABLE_NAME))
-            migrate_ok = res.ok
-
-            migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
-            loader_node.remoter.receive_files(src='migratelog', dst=migrate_log_path)
-            with open(migrate_log_path) as file:
-                self.consistency_ok = 'Consistency check OK.\n' in (line for line in file)
+                self.consistency_ok = self.consistency_ok \
+                        and not 'Inconsistency detected.\n' in (line for line in file)
 
         if not self.consistency_ok:
             self.log.error('Inconsistency detected.')
