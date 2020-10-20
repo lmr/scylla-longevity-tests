@@ -15,8 +15,9 @@ import os
 import time
 import logging
 from textwrap import dedent
-from typing import Dict
+from typing import Dict, Optional
 from functools import cached_property
+from datetime import datetime
 
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
 
@@ -81,8 +82,9 @@ class GCENode(cluster.BaseNode):
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
-    def _set_keep_alive(self) -> bool:
-        return self._instance_wait_safe(self._gce_service.ex_set_node_labels, self._instance, {"keep": "alive"}) and \
+    def _set_keep_alive(self, until: Optional[datetime] = None) -> bool:
+        value = "alive" if until is None else until.strftime(cluster.KEEP_DATETIME_TAG_FORMAT)
+        return self._instance_wait_safe(self._gce_service.ex_set_node_labels, self._instance, {"keep": value}) and \
             super()._set_keep_alive()
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):

@@ -8,7 +8,7 @@ import os
 import tempfile
 import json
 import base64
-from typing import List, Dict
+from typing import List, Dict, Optional
 from textwrap import dedent
 from datetime import datetime
 from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
@@ -475,8 +475,9 @@ class AWSNode(cluster.BaseNode):
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
-    def _set_keep_alive(self):
-        self._ec2_service.create_tags(Resources=[self._instance.id], Tags=[{"Key": "keep", "Value": "alive"}])
+    def _set_keep_alive(self, until: Optional[datetime] = None) -> bool:
+        value = "alive" if until is None else until.strftime(cluster.KEEP_DATETIME_TAG_FORMAT)
+        self._ec2_service.create_tags(Resources=[self._instance.id], Tags=[{"Key": "keep", "Value": value}])
         return super()._set_keep_alive()
 
     @property

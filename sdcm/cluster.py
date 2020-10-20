@@ -29,7 +29,7 @@ import itertools
 from collections import defaultdict
 from typing import List, Optional, Dict, Union
 from textwrap import dedent
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import cached_property, wraps
 from tenacity import RetryError
 
@@ -89,6 +89,9 @@ SCYLLA_DIR = "/var/lib/scylla"
 
 INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
 SPOT_TERMINATION_CHECK_DELAY = 5
+
+KEEP_DATETIME_TAG_FORMAT = "until-%Y%m%d-%H%M"
+KEEP_ALIVE_ON_FAILURE = 72  # hours
 
 LOGGER = logging.getLogger(__name__)
 
@@ -457,7 +460,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.start_task_threads()
         self._init_port_mapping()
 
-        self.set_keep_alive()
+        self.set_keep_alive(until=datetime.utcnow() + timedelta(hours=KEEP_ALIVE_ON_FAILURE, minutes=TEST_DURATION))
 
     def _init_remoter(self, ssh_login_info):
         self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
@@ -495,13 +498,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return {**self.parent_cluster.tags,
                 "Name": str(self.name), }
 
-    def _set_keep_alive(self):
+    def _set_keep_alive(self, until: Optional[datetime] = None) -> bool:  # pylint: disable=unused-argument
         ContainerManager.set_all_containers_keep_alive(self)
         return True
 
-    def set_keep_alive(self):
+    def set_keep_alive(self, until: Optional[datetime] = None) -> None:
         node_type = None if self.parent_cluster is None else self.parent_cluster.node_type
-        if Setup.should_keep_alive(node_type) and self._set_keep_alive():
+        if Setup.should_keep_alive(node_type) and self._set_keep_alive(until=until):
             self.log.info("Keep this node alive")
 
     @property
@@ -2827,9 +2830,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             private_ip_file.write("\n")
 
     def set_keep_alive_on_failure(self):
+        until = datetime.utcnow() + timedelta(hours=KEEP_ALIVE_ON_FAILURE)
         for node in self.nodes:
             if hasattr(node, "set_keep_alive"):
-                node.set_keep_alive()
+                node.set_keep_alive(until=until)
 
     def get_node_by_ip(self, node_ip, datacenter=None):
         full_node_ip = f"{datacenter}.{node_ip}" if datacenter else node_ip
