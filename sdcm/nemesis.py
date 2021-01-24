@@ -1653,27 +1653,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._mgmt_backup(backup_specific_tables=False)
 
     def _mgmt_backup(self, backup_specific_tables):
-        # TODO: When cloud backup is supported - add this to the below 'if' statement:
-        #  and not self.cluster.params.get('use_cloud_manager')
-        if not self.cluster.params.get('use_mgmt'):
+        if not (self.cluster.params.get('use_mgmt') or
+                self.cluster.params.get('use_cloud_manager')):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
-        if not self.cluster.params.get('backup_bucket_location'):
-            raise UnsupportedNemesis('backup bucket location configuration is not defined!')
 
         mgr_cluster = self.cluster.get_cluster_manager()
         cluster_backend = self.cluster.params.get('cluster_backend')
-        backup_bucket_location = self.cluster.params.get('backup_bucket_location')
+        backup_bucket_location = self.cluster.get_backup_buckets_name()
         if cluster_backend == 'aws':
-            bucket_name = f"s3:{backup_bucket_location.split()[0]}"
-        elif cluster_backend == 'gce':
-            bucket_name = f"gcs:{backup_bucket_location}"
+            location_list = [f"s3:{backup_bucket_location.split()[0]}"]
+        elif cluster_backend == 'gce':  # For cloud it should be "elif 'gce' in cluster_backend:
+            location_list = [f"gcs:{backup_bucket_location}"]
+        elif cluster_backend == 'aws-siren':
+            location_list = None
         else:
             raise ValueError(f"cluster_backend={cluster_backend} not supported in ManagementBackup")
         if backup_specific_tables:
             non_test_keyspaces = self.cluster.get_test_keyspaces()
-            mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ], keyspace_list=non_test_keyspaces)
+            mgr_task = mgr_cluster.create_backup_task(location_list=location_list, keyspace_list=non_test_keyspaces)
         else:
-            mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
+            mgr_task = mgr_cluster.create_backup_task(location_list=location_list)
 
         succeeded, status = mgr_task.wait_for_task_done_status(timeout=54000)
         if succeeded and status == TaskStatus.DONE:
@@ -3418,6 +3417,10 @@ class ToggleTableIcsMonkey(Nemesis):
 
 class MgmtBackup(Nemesis):
     disruptive = False
+
+    def __init__(self, *args, **kwargs):
+        super(MgmtBackup, self).__init__(*args, **kwargs)
+        self.filter_seed = False
 
     @log_time_elapsed_and_status
     def disrupt(self):

@@ -411,6 +411,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             sudo systemctl restart network
         """)
 
+    def get_backup_buckets_name(self):
+        backup_bucket_location = self.params.get('backup_bucket_location')
+        return backup_bucket_location
+
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         post_boot_script = cluster.Setup.get_startup_script()
         if self.extra_network_interface:
