@@ -10,23 +10,83 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+from functools import cached_property
 
 import datetime
 import re
 
 from sdcm.cluster import SCYLLA_YAML_PATH
 from sdcm.tester import ClusterTester
-
+# TODO: uncomment when problem with SSL connection to MYSQL will be solved
+# from sdcm.utils.housekeeping import HousekeepingDB
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
 
 
 class ArtifactsTest(ClusterTester):
+    # TODO: uncomment when problem with SSL connection to MYSQL will be solved
+    # REPO_TABLE = "housekeeping.repo"
+    # CHECK_VERSION_TABLE = "housekeeping.checkversion"
+
+    # TODO: uncomment setUp and tearDown when problem with SSL connection to MYSQL will be solved
+    # def setUp(self) -> None:
+    #     super().setUp()
+    #
+    #     self.housekeeping = HousekeepingDB.from_keystore_creds()
+    #     self.housekeeping.connect()
+    #
+    # def tearDown(self) -> None:
+    #     self.housekeeping.close()
+    #
+    #     super().tearDown()
+
+    # TODO: uncomment check_version when problem with SSL connection to MYSQL will be solved
+    # def check_scylla_version_in_housekeepingdb(self, prev_id: int, expected_status_code: str, new_row_expected: bool) -> int:
+    #     """
+    #     Validate reported version
+    #     prev_id: check if new version is created
+    #     """
+    #     assert self.node.uuid, "Node UUID wasn't created"
+    #
+    #     row = self.housekeeping.get_most_recent_record(query=f"SELECT id, version, ip, statuscode "
+    #                                                          f"FROM {self.CHECK_VERSION_TABLE} "
+    #                                                          f"WHERE uuid = %s", args=(self.node.uuid,))
+    #     self.log.debug(f"Last row in {self.CHECK_VERSION_TABLE} for uuid '{self.node.uuid}': {row}")
+    #
+    #     # Validate public IP address
+    #     assert self.node.public_ip_address == row[2], \
+    #         f"Wrong IP address is saved in {self.CHECK_VERSION_TABLE}: expected {self.node.public_ip_address}, " \
+    #         f"got: {row[2]}"
+    #
+    #     # Validate reported node version
+    #     assert row[1] == self.version, \
+    #         f"Wrong version is saved in {self.CHECK_VERSION_TABLE}: " \
+    #         f"expected {self.node.public_ip_address}, got: {row[2]}"
+    #
+    #     # Validate expected status code
+    #     assert row[3] == expected_status_code, \
+    #         f"Wrong statuscode is saved in {self.CHECK_VERSION_TABLE}: " \
+    #         f"expected {expected_status_code}, got: {row[3]}"
+    #
+    #     if prev_id:
+    #         # Validate row id
+    #         if new_row_expected:
+    #             assert row[0] > prev_id, f"New row wasn't saved in {self.CHECK_VERSION_TABLE}"
+    #         else:
+    #             assert row[0] == prev_id, f"New row was saved in {self.CHECK_VERSION_TABLE} unexpectedly"
+    #
+    #     return row[0] if row else 0
+
     @property
     def node(self):
         if self.db_cluster is None or not self.db_cluster.nodes:
             raise ValueError('DB cluster has not been initiated')
         return self.db_cluster.nodes[0]
+
+    @cached_property
+    def version(self):
+        version = self.node.get_scylla_version()
+        return version.replace('scylladb-', '')
 
     def check_cluster_name(self):
         with self.node.remote_scylla_yaml(SCYLLA_YAML_PATH) as scylla_yaml:
@@ -89,14 +149,32 @@ class ArtifactsTest(ClusterTester):
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
 
+            # TODO: uncomment when problem with SSL connection to MYSQL will be solved
+            # self.log.info(f"Validate version after install")
+            # version_id_after_install = self.check_scylla_version_in_housekeepingdb(prev_id=0,
+            #                                                                        expected_status_code='i',
+            #                                                                        new_row_expected=False)
+
         with self.subTest("check Scylla server after stop/start"):
             self.node.stop_scylla(verify_down=True)
             self.node.start_scylla(verify_up=True)
             self.check_scylla()
 
+            # TODO: uncomment when problem with SSL connection to MYSQL will be solved
+            # self.log.info(f"Validate version after stop/start")
+            # version_id_after_stop = self.check_scylla_version_in_housekeepingdb(prev_id=version_id_after_install,
+            #                                                                     expected_status_code='r',
+            #                                                                     new_row_expected=True)
+
         with self.subTest("check Scylla server after restart"):
             self.node.restart_scylla(verify_up_after=True)
             self.check_scylla()
+
+            # TODO: uncomment when problem with SSL connection to MYSQL will be solved
+            # self.log.info(f"Validate version after restart")
+            # self.check_scylla_version_in_housekeepingdb(prev_id=version_id_after_stop,
+            #                                             expected_status_code='r',
+            #                                             new_row_expected=True)
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
