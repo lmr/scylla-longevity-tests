@@ -1108,7 +1108,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False,
-                          stop_test_on_failure=True):
+                          stop_test_on_failure=True, timeout=None):
 
         params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
@@ -1116,7 +1116,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if 'cassandra-stress' in stress_cmd:  # cs cmdline might started with JVM_OPTION
             params['stop_test_on_failure'] = stop_test_on_failure
-            return self.run_stress_cassandra_thread(**params)
+            return self.run_stress_cassandra_thread(**params, timeout=timeout)
         elif stress_cmd.startswith('scylla-bench'):
             params['stop_test_on_failure'] = stop_test_on_failure
             return self.run_stress_thread_bench(**params)
@@ -1133,9 +1133,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def run_stress_cassandra_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments,unused-argument
                                     round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False,  # pylint: disable=too-many-arguments,unused-argument
-                                    stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
+                                    stop_test_on_failure=True, timeout=None):  # pylint: disable=too-many-arguments,unused-argument
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
-        timeout = self.get_duration(duration)
+        timeout = timeout or self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress",
                                            aggregate=stats_aggregate_cmds)

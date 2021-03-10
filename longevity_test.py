@@ -372,7 +372,7 @@ class LongevityTest(ClusterTester):
         for batch, _, _, extra_tables_idx in list(chunks(stress_params_list, batch_size)):
 
             stress_queue = list()
-            batch_params = dict(round_robin=True, stress_cmd=[])
+            batch_params = dict(round_robin=True, stress_cmd=[], timeout=self.params.get('cs_duration'))
 
             # add few stress threads with tables that weren't pre-created
             customer_profiles = self.params.get('cs_user_profiles')
