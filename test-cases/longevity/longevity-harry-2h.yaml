@@ -1,0 +1,16 @@
+test_duration: 240
+stress_cmd: ["/usr/bin/cassandra-harry"]
+
+n_db_nodes: 6
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '111'
+nemesis_interval: 2
+ssh_transport: 'libssh2'
+
+user_prefix: 'longevity-10gb-3h'
+space_node_threshold: 64424

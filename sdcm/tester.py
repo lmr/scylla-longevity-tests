@@ -47,6 +47,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import minikube, gke
 from sdcm.scylla_bench_thread import ScyllaBenchThread
+from sdcm.cassandra_harry_thread import CassandraHarryThread
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
     rows_to_list, ec2_ami_get_root_device_name
@@ -1120,6 +1121,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         elif stress_cmd.startswith('scylla-bench'):
             params['stop_test_on_failure'] = stop_test_on_failure
             return self.run_stress_thread_bench(**params)
+        elif stress_cmd.startswith('cassandra-harry'):
+            params['stop_test_on_failure'] = stop_test_on_failure
+            return self.run_stress_thread_harry(**params)
         elif stress_cmd.startswith('bin/ycsb'):
             return self.run_ycsb_thread(**params)
         elif stress_cmd.startswith('ndbench'):
@@ -1186,6 +1190,31 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             time.sleep(60)
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
         return bench_thread
+
+    def run_stress_thread_harry(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments,unused-argument
+                                round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False,
+                                stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
+
+        timeout = self.get_duration(duration)
+        stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
+
+        # if self.create_stats:
+        #    self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
+        harry_thread = CassandraHarryThread(
+            stress_cmd, loader_set=self.loaders, timeout=timeout,
+            node_list=self.db_cluster.nodes,
+            round_robin=round_robin,
+            use_single_loader=use_single_loader,
+            stop_test_on_failure=stop_test_on_failure,
+            credentials=self.db_cluster.get_db_auth()
+        )
+        harry_thread.run()
+        scylla_encryption_options = self.params.get('scylla_encryption_options')
+        if scylla_encryption_options and 'write' in stress_cmd:
+            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
+            time.sleep(60)
+            self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
+        return harry_thread
 
     def run_ycsb_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments,unused-argument
                         round_robin=False, stats_aggregate_cmds=True,  # pylint: disable=too-many-arguments,unused-argument

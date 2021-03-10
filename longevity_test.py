@@ -51,6 +51,8 @@ class LongevityTest(ClusterTester):
                 stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
                                                            stats_aggregate_cmds=False,
                                                            round_robin=self.params.get('round_robin')))
+            elif stress_cmd.startswith('cassandra-harry'):
+                stress_queue.append(self.run_stress_thread(**params))
             else:
                 stress_queue.append(self.run_stress_thread(**params))
 

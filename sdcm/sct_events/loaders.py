@@ -94,6 +94,24 @@ class ScyllaBenchEvent(StressEvent, abstract=True):
 ScyllaBenchEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR, timeout=Severity.ERROR)
 
 
+class CassandraHarryEvent(StressEvent, abstract=True):
+    failure: Type[StressEventProtocol]
+    error: Type[SctEventProtocol]
+    timeout: Type[StressEventProtocol]
+    start: Type[StressEventProtocol]
+    finish: Type[StressEventProtocol]
+
+    @property
+    def msgfmt(self):
+        fmt = super(StressEvent, self).msgfmt + ": type={0.type} node={0.node} stress_cmd={0.stress_cmd}"
+        if self.errors:
+            return fmt + " error={0.errors_formatted}"
+        return fmt
+
+
+ScyllaBenchEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR, timeout=Severity.ERROR)
+
+
 class BaseYcsbStressEvent(StressEvent, abstract=True):
     pass
 

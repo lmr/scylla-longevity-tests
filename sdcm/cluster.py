@@ -4329,6 +4329,7 @@ class BaseLoaderSet():
         node.wait_cs_installed(verbose=verbose)
 
         self.install_scylla_bench(node)
+        self.install_cassandra_harry(node)
 
         # install docker
         docker_install = dedent("""
@@ -4512,6 +4513,22 @@ class BaseLoaderSet():
             echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
             source $HOME/.bash_profile
             go get -u github.com/scylladb/scylla-bench
+        """))
+
+    @staticmethod
+    def install_cassandra_harry(node):
+        if node.distro.is_rhel_like:
+            node.remoter.sudo("yum install -y git")
+        else:
+            node.remoter.sudo(shell_script_cmd("""\
+                apt-get update
+                apt-get install -y git
+            """))
+        node.remoter.sudo(shell_script_cmd("""\
+            git clone -b scylla-branch https://github.com/amoskong/cassandra-harry
+            cd cassandra-harry
+            make mvn
+            sudo ln -s `realpath scripts/cassandra-harry` /usr/bin/cassandra-harry
         """))
 
 
