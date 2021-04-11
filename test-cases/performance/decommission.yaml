@@ -1,0 +1,10 @@
+test_duration: 1440
+prepare_write_cmd: "cassandra-stress write cl=QUORUM n=550200300 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=1000 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..550200300"
+stress_cmd: "cassandra-stress read cl=QUORUM n=550200300 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..550200300"
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.2xlarge'
+instance_type_loader: 'c5.2xlarge'
+user_prefix: 'perf-decommission'

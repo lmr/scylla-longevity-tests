@@ -1,0 +1,14 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    aws_region: 'eu-west-1',
+    test_name: 'repair_perf_test.RepairPerfTest.test_bootstrap',
+    test_config: 'test-cases/performance/bootstrap.yaml',
+
+    timeout: [time: 120, unit: 'MINUTES'],
+    post_behaviour: 'destroy'
+)

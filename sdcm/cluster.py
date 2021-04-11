@@ -441,6 +441,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap.
         self.enable_auto_bootstrap = True
+        self.enable_repair_based_node_ops = None
 
         self.scylla_version = ''
         self.scylla_version_detailed = ''
@@ -1798,6 +1799,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             else:
                 if 'auto_bootstrap' in scylla_yml:
                     scylla_yml['auto_bootstrap'] = False
+
+            if self.enable_repair_based_node_ops is True:
+                scylla_yml['enable_repair_based_node_ops'] = True
+            elif self.enable_repair_based_node_ops is False:
+                scylla_yml['enable_repair_based_node_ops'] = False
 
             if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
                 scylla_yml['authenticator'] = authenticator
