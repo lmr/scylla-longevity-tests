@@ -35,8 +35,8 @@ class ErrorUploadAnnotations(Exception):
 
 
 def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-many-return-statements
-    if not is_docker_available():
-        return False
+    # if not is_docker_available():
+    #    return False
 
     arch = get_monitoring_stack_archive(test_id, date_time)
     if not arch:

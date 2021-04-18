@@ -11,7 +11,7 @@ WORK_DIR=/sct
 HOST_NAME=SCT-CONTAINER
 RUN_BY_USER=$(python3 "${SCT_DIR}/sdcm/utils/get_username.py")
 USER_ID=$(id -u "${USER}")
-HOME_DIR=${HOME}
+HOME_DIR=`realpath ${HOME}`
 
 export SCT_TEST_ID=${SCT_TEST_ID:-$(uuidgen)}
 export GIT_USER_EMAIL=$(git config --get user.email)
@@ -25,14 +25,17 @@ else
     TERM_SET_SIZE="export COLUMNS=`tput cols`; export LINES=`tput lines`;"
 fi
 
-if ! docker --version; then
-    echo "Docker not installed!!! Please run 'install-hydra.sh'!"
-    exit 1
+if which docker >/dev/null 2>&1 ; then
+  tool=${HYDRA_TOOL-docker}
+elif which podman >/dev/null 2>&1 ; then
+  tool=${HYDRA_TOOL-podman}
+else
+  die "Please make sure you install either podman or docker on this machine to run dbuild"
 fi
 
-if [[ ${USER} == "jenkins" || -z "`docker images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+if [[ ${USER} == "jenkins" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
     echo "Pull version $VERSION from Docker Hub..."
-    docker pull ${DOCKER_REPO}:${VERSION}
+    $tool pull ${DOCKER_REPO}:${VERSION}
 else
     echo "There is ${DOCKER_REPO}:${VERSION} in local cache, use it."
 fi
@@ -65,33 +68,55 @@ done
 
 ./get-qa-ssh-keys.sh >/dev/null 2>&1
 
+is_podman="$($tool --help | { grep -o podman || :; })"
+
+docker_common_args=()
+
+if [ -z "$is_podman" ]; then
+    docker_common_args+=(
+       -u "$(id -u):$(id -g)"
+       "${group_args[@]}"
+       -v /etc/passwd:/etc/passwd:ro
+       -v /etc/group:/etc/group:ro
+       -v /sys/fs/cgroup:/sys/fs/cgroup:ro
+       -v /var/run/docker.sock:/var/run/docker.dock:z
+       -v /etc/sudoers:/etc/sudoers:ro
+       -v /etc/sudoers.d/:/etc/sudoers.d:ro
+       -v /etc/shadow:/etc/shadow:ro
+       )
+else
+    TMP_PASSWD=$(mktemp --tmpdir passwd.XXXXXX)
+    FULLNAME=$(getent passwd $USER | cut -d ':' -f 5)
+    echo "$USER:x:0:0:$FULLNAME:$HOME:/bin/bash" > "$TMP_PASSWD"
+    docker_common_args+=(
+      -v "$TMP_PASSWD:/etc/passwd:ro"
+      --log-level=debug
+      --network host
+      -e DOCKER_HOST=tcp://localhost:12345
+    )
+fi
+
 function run_in_docker () {
     CMD_TO_RUN=$1
     REMOTE_DOCKER_HOST=$2
     echo "Going to run '${CMD_TO_RUN}'..."
-    docker ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
+    $tool ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} \
         -h ${HOST_NAME} \
         -l "TestId=${SCT_TEST_ID}" \
         -l "RunByUser=${RUN_BY_USER}" \
-        -v /var/run:/run \
-        -v "${SCT_DIR}:${SCT_DIR}" \
-        -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
-        -v /tmp:/tmp \
-        -v /var/tmp:/var/tmp \
-        -v "${HOME_DIR}:${HOME_DIR}" \
-        -v /etc/passwd:/etc/passwd:ro \
-        -v /etc/group:/etc/group:ro \
-        -v /etc/sudoers:/etc/sudoers:ro \
-        -v /etc/sudoers.d/:/etc/sudoers.d:ro \
-        -v /etc/shadow:/etc/shadow:ro \
+        -v "${SCT_DIR}:${SCT_DIR}:z" \
+        --security-opt seccomp=unconfined \
+        -v /tmp:/tmp:z \
+        -v /var/tmp:/var/tmp:z \
+        -v ${HOME_DIR}:${HOME_DIR}:z \
         -w "${SCT_DIR}" \
         -e JOB_NAME="${JOB_NAME}" \
         -e BUILD_URL="${BUILD_URL}" \
         -e BUILD_NUMBER="${BUILD_NUMBER}" \
         -e _SCT_BASE_DIR="${SCT_DIR}" \
         -e GIT_USER_EMAIL \
-        -u ${USER_ID} \
-        ${group_args[@]} \
+        ${DOCKER_EXTRA_OPTIONS} \
+        ${docker_common_args[@]} \
         ${SCT_OPTIONS} \
         ${BUILD_OPTIONS} \
         ${JENKINS_OPTIONS} \
