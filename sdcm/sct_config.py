@@ -246,6 +246,12 @@ class SCTConfiguration(dict):
         dict(name="use_ldap_authorization", env="SCT_USE_LDAP_AUTHORIZATION", type=boolean,
              help="When defined true, will create a docker container with LDAP and configure scylla.yaml to use it"),
 
+        dict(name="use_saslauthd_authenticator", env="SCT_USE_LDAP_AUTHENTICATOR", type=boolean,
+             help="When defined true, will create a docker container with LDAP and configure scylla.yaml to use it"),
+
+        dict(name="prepare_saslauthd", env="SCT_PREPARE_SASLAUTHD", type=boolean,
+             help="When defined true, will install and start saslauthd service"),
+
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),
 
@@ -354,7 +360,7 @@ class SCTConfiguration(dict):
 
         dict(name="authenticator", env="SCT_AUTHENTICATOR", type=str,
              help="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator",
-             choices=("PasswordAuthenticator", "AllowAllAuthenticator"),
+             choices=("PasswordAuthenticator", "AllowAllAuthenticator", "com.scylladb.auth.SaslauthdAuthenticator"),
              ),
 
         dict(name="authenticator_user", env="SCT_AUTHENTICATOR_USER", type=str,

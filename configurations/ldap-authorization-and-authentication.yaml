@@ -1,0 +1,8 @@
+authenticator: 'com.scylladb.auth.SaslauthdAuthenticator'
+prepare_saslauthd: true
+use_saslauthd_authenticator: true
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+
+authorizer: 'CassandraAuthorizer'
+use_ldap_authorization: true

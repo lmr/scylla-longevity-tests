@@ -35,6 +35,7 @@ import getpass
 from typing import Iterable, List, Callable, Optional, Dict, Union
 from urllib.parse import urlparse
 from unittest.mock import Mock
+from textwrap import dedent
 
 from functools import wraps
 from collections import defaultdict
@@ -57,6 +58,7 @@ from packaging.version import Version
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
+from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS
 
 
 LOGGER = logging.getLogger('utils')
@@ -1873,3 +1875,47 @@ def clean_enospc_on_node(target_node, sleep_time):
     time.sleep(sleep_time / 2)
     target_node.remoter.run('sudo systemctl restart scylla-server.service')
     target_node.wait_db_up()
+
+
+def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=True):
+    """
+    Update the authenticator of nodes, restart the nodes to make the change effective
+    """
+    for node in nodes:
+        node.remoter.run(
+            f"sudo sed -ie 's/^authenticator:.*/authenticator: {authenticator}/g' /etc/scylla/scylla.yaml")
+        if restart:
+            if authenticator == 'com.scylladb.auth.SaslauthdAuthenticator':
+                node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with password=\'{LDAP_PASSWORD}\'')
+            node.use_saslauthd_authenticator = authenticator == 'com.scylladb.auth.SaslauthdAuthenticator'
+            node.parent_cluster.params['are_ldap_users_on_scylla'] = node.use_saslauthd_authenticator
+            node.restart_scylla_server()
+            node.wait_db_up()
+
+
+def prepare_and_start_saslauthd_service(node):
+    """
+    Install and setup saslauthd service.
+    """
+    if node.is_rhel_like():
+        setup_script = dedent(f"""
+            sudo yum install -y cyrus-sasl
+            sudo systemctl enable saslauthd
+            echo 'MECH=ldap' | sudo tee -a /etc/sysconfig/saslauthd
+            sudo touch /etc/saslauthd.conf
+        """)
+    else:
+        setup_script = dedent(f"""
+            sudo apt-get install -y sasl2-bin
+            sudo systemctl enable saslauthd
+            echo -e 'MECHANISMS=ldap\nSTART=yes\n' | sudo tee -a /etc/default/saslauthd
+            sudo touch /etc/saslauthd.conf
+            sudo adduser scylla sasl  # to avoid the permission issue of unit socket
+        """)
+    node.remoter.run('bash -cxe "%s"' % setup_script)
+    conf = node.get_saslauthd_config()
+    for key in conf.keys():
+        node.remoter.run(f'echo "{key}: {conf[key]}" | sudo tee -a /etc/saslauthd.conf')
+    node.remoter.run(
+        f"echo 'saslauthd_socket_path: /run/saslauthd/mux' |sudo tee --append /etc/scylla/scylla.yaml")
+    node.remoter.run('sudo systemctl restart saslauthd')

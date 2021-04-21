@@ -304,14 +304,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.alternator = alternator.api.Alternator(
             aws_access_key_id=self.params.get("alternator_access_key_id"),
             aws_secret_access_key=self.params.get("alternator_secret_access_key"))
-        if self.params.get("use_ldap_authorization"):
+        if self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator"):
             self.configure_ldap(node=self.localhost, use_ssl=False)
+
+        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
+        if self.params.get("use_ldap_authorization"):
             self.params['are_ldap_users_on_scylla'] = False
             ldap_role = LDAP_ROLE
             ldap_users = LDAP_USERS.copy()
             ldap_address = list(Setup.LDAP_ADDRESS).copy()
             unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
-            ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
             user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
             ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
                           ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
@@ -319,6 +321,22 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info('LDAP info {}'.format(ldap_address))
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
+        if self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator"):
+            ldap_users = LDAP_USERS.copy()
+            ldap_address = list(Setup.LDAP_ADDRESS).copy()
+            ldap_entry = [f'ou=Person,{LDAP_BASE_OBJECT}',
+                          ['organizationalUnit', 'top'],
+                          {'ou': 'Person'}]
+            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
+            # Buildin user also need to be added in ldap server, otherwise it can't login to create LDAP_USERS
+            for user in [self.params.get('authenticator_user')] + LDAP_USERS:
+                password = LDAP_PASSWORD if user in LDAP_USERS else self.params.get("authenticator_password")
+                ldap_entry = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}',
+                              ['uidObject', 'organizationalPerson', 'top'],
+                              {'userPassword': password, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
+                self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                              user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         start_events_device(log_dir=self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
@@ -443,10 +461,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.legacy_init_nodes(db_cluster=self.db_cluster)
             else:
                 self.init_nodes(db_cluster=self.db_cluster)
-            if self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla'):
+            # running `set_system_auth_rf()` before changing authorization/authentication protocols
+            self.set_system_auth_rf()
+            if (self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla')) or self.params.get('prepare_saslauthd'):
                 self.db_cluster.nodes[0].create_ldap_users_on_scylla()
                 self.params['are_ldap_users_on_scylla'] = True
-            self.set_system_auth_rf()
 
             db_node_address = self.db_cluster.nodes[0].ip_address
             self.loaders.wait_for_init(db_node_address=db_node_address)
@@ -1299,10 +1318,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if protocol_version is None:
             protocol_version = 3
 
-        authenticator = self.params.get('authenticator')
-        if user is None and password is None and (authenticator and authenticator == 'PasswordAuthenticator'):
-            user = self.params.get('authenticator_user', default='cassandra')
-            password = self.params.get('authenticator_password', default='cassandra')
+        credentials = self.db_cluster.get_db_auth()
+        user, password = credentials if credentials else (None, None)
 
         if user is not None:
             auth_provider = self.get_auth_provider(user=user,

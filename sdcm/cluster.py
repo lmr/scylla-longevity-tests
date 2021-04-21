@@ -47,7 +47,8 @@ from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait, mgmt
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
-    get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
+    get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, \
+    update_authenticator, prepare_and_start_saslauthd_service
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -1748,6 +1749,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @staticmethod
     def get_ldap_config():
+        if Setup.LDAP_ADDRESS is None:
+            return {}
         ldap_server_ip = '127.0.0.1' if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else Setup.LDAP_ADDRESS[0]
         ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else \
             Setup.LDAP_ADDRESS[1]
@@ -1759,10 +1762,32 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
                 'ldap_bind_passwd': LDAP_PASSWORD}
 
+    @staticmethod
+    def get_saslauthd_config():
+        if Setup.LDAP_ADDRESS is None:
+            return {}
+        ldap_server_ip = '127.0.0.1' if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else Setup.LDAP_ADDRESS[0]
+        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else \
+            Setup.LDAP_ADDRESS[1]
+        return {'ldap_servers': f'ldap://{ldap_server_ip}:{ldap_port}/',
+                'ldap_search_base': f'ou=Person,{LDAP_BASE_OBJECT}',
+                'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
+                'ldap_bind_pw': LDAP_PASSWORD}
+
     def create_ldap_users_on_scylla(self):
         self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
         for user in LDAP_USERS:
-            self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true AND password=\'{LDAP_PASSWORD}\'')
+            # Cannot create passwords with SaslauthdAuthenticator
+            self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true')
+        result = self.remoter.run("grep -o '^authenticator: .*' /etc/scylla/scylla.yaml")
+        if 'com.scylladb.auth.SaslauthdAuthenticator' in result.stdout:
+            opposite_auth = 'PasswordAuthenticator'
+            update_authenticator([self], opposite_auth)
+        # First LDAP_USERS will be used to alter system tables, so change it to superuser.
+        self.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with SUPERUSER=true and password=\'{LDAP_PASSWORD}\'')
+        if 'com.scylladb.auth.SaslauthdAuthenticator' in result.stdout:
+            orig_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
+            update_authenticator([self], orig_auth)
 
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
@@ -1839,7 +1864,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if 'auto_bootstrap' in scylla_yml:
                 scylla_yml['auto_bootstrap'] = False
 
-        if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
+        if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator', 'com.scylladb.auth.SaslauthdAuthenticator']:
             scylla_yml['authenticator'] = authenticator
 
         if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
@@ -2850,6 +2875,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.params = params
         self.datacenter = region_names or []
         self.dead_nodes_ip_address_list = set()
+        self.use_saslauthd_authenticator = self.params.get('use_saslauthd_authenticator')
 
         if Setup.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
@@ -2970,7 +2996,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         node.destroy()
 
     def get_db_auth(self):
-        if self.params.get('use_ldap_authorization') and self.params.get('are_ldap_users_on_scylla'):
+        if (self.params.get('use_ldap_authorization') or self.use_saslauthd_authenticator) and self.params.get('are_ldap_users_on_scylla'):
             user = LDAP_USERS[0]
             password = LDAP_PASSWORD
         else:
@@ -3596,6 +3622,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
 
             self._scylla_post_install(node, install_scylla)
+
+            # prepare and start saslauthd service
+            if self.params.get('prepare_saslauthd'):
+                prepare_and_start_saslauthd_service(node)
 
             node.stop_scylla_server(verify_down=False)
             node.clean_scylla_data()
