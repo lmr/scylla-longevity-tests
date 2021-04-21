@@ -10,5 +10,5 @@ perfRegressionParallelPipeline(
     test_config: "test-cases/performance/perf-regression-throughput-1250gb-with-ebs-volume.yaml",
     sub_tests: ["test_write", "test_read", "test_mixed"],
 
-    timeout: [time: 600, unit: "MINUTES"]
+    timeout: [time: 1600, unit: "MINUTES"]
 )
