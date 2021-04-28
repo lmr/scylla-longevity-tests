@@ -481,7 +481,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # allow to correctly save results for future compare
         self.create_test_stats(doc_id_with_timestamp=True)
         # wait compactions will be finished
-        self.wait_no_compactions_running()
+        self.wait_no_compactions_running(n=240, sleep_time=180)
         self.run_fstrim_on_all_db_nodes()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)

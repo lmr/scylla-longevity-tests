@@ -2346,7 +2346,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
-    def wait_no_compactions_running(self, n=180, sleep_time=60):  # pylint: disable=invalid-name
+    def wait_no_compactions_running(self, n=80, sleep_time=60):  # pylint: disable=invalid-name
         # Wait for up to 80 mins that there are no running compactions
         @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
         def is_compactions_done():

@@ -16,7 +16,7 @@ n_monitor_nodes: 1
 
 instance_type_loader: 'c5.2xlarge'
 instance_type_monitor: 't3.large'
-instance_type_db: 'r4.2xlarge'
+instance_type_db: 'r5.2xlarge'
 
 user_prefix: 'perf-ebs-throughput'
 space_node_threshold: 644245094

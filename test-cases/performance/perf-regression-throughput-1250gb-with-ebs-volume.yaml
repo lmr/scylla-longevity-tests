@@ -1,21 +1,21 @@
 test_duration: 1580
 
-prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..78125000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=78125001..156250000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=156250001..234375000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=234375001..312500000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=312500001..390625000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=390625001..468750000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=468750001..546875000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=546875001..625000000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=625000001..703125000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=703125001..781250000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=781250001..859375000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=859375001..937500000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=937500001..1015625000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1015625001..1093750000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1093750001..1171875000",
-                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=30 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1171875001..1250000000"]
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..78125000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=78125001..156250000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=156250001..234375000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=234375001..312500000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=312500001..390625000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=390625001..468750000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=468750001..546875000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=546875001..625000000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=625000001..703125000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=703125001..781250000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=781250001..859375000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=859375001..937500000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=937500001..1015625000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1015625001..1093750000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1093750001..1171875000",
+                    "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1171875001..1250000000"]
 
 
 stress_cmd_w: "cassandra-stress write no-warmup cl=ALL n=1250000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1250000000"
