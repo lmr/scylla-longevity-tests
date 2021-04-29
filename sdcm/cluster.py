@@ -4718,7 +4718,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 for: 1s
                 labels:
                   severity: "1"
-                  sct_severity: "ERROR"
+                  sct_severity: "WARNING"
                 annotations:
                   description: "Cassandra Stress write latency more than 1000ms"
                   summary: "Cassandra Stress write latency is more than 1000ms during 1 sec period of time"
