@@ -4736,7 +4736,7 @@ class BaseLoaderSet():
         for loader in self.nodes:
             sb_active = loader.remoter.run(cmd='pgrep -f gemini', verbose=False, ignore_status=True)
             if sb_active.exit_status == 0:
-                kill_result = loader.remoter.run('pkill -f -QUIT gemini', ignore_status=True)
+                kill_result = loader.remoter.run('pkill -f -SIGINT gemini', ignore_status=True)
                 if kill_result.exit_status != 0:
                     self.log.warning('Terminate gemini on node %s:\n%s', loader, kill_result)
 

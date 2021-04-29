@@ -1,6 +1,6 @@
 # TODO: need to qualify on GCE and AWS
 
-test_duration: 250
+test_duration: 500
 
 # workloads
 write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..20100200 -log interval=5
@@ -38,3 +38,14 @@ append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 
 # SCT_SCYLLA_VERSION=3.0 or SCT_SCYLLA_REPO=
 # for the upgrading version you need:
 # SCT_NEW_SCYLLA_REPO=https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/e438e3e3ce41f6c878b111f5c19bf2b28aa51098-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1-e616363bdc0e7a0d193a157851d7c15d952a0aad-a6b2b2355c666b1893f702a587287da978aeec22/53/scylla.repo
+
+stress_cdclog_reader_cmd: "cdc-stressor -username cassandra -password cassandra -duration 2h -stream-query-round-duration 30s"
+
+gemini_cmd: "gemini -d --duration 2h \
+-c 10 -m write -f --non-interactive --cql-features normal \
+--max-mutation-retries 5 --max-mutation-retries-backoff 500ms \
+--async-objects-stabilization-attempts 5 --async-objects-stabilization-backoff 500ms \
+--replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '3'}\" \
+--table-options \"cdc={'enabled': true}\" --test-username cassandra --test-password cassandra"
+gemini_version: 'latest'
+gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used

@@ -14,5 +14,5 @@ rollingUpgradePipeline(
     workaround_kernel_bug_for_iotune: false,
     internode_compression: 'all',
 
-    timeout: [time: 360, unit: 'MINUTES']
+    timeout: [time: 550, unit: 'MINUTES']
 )
