@@ -688,6 +688,9 @@ class AWSNode(cluster.BaseNode):
 
         need_to_setup = any(ss in self._instance.instance_type for ss in ("i2", "i3", ))
 
+        if self.parent_cluster.is_ebs_volumes_attached():
+            need_to_setup = False
+
         with ExitStack() as stack:
             if need_to_setup:
                 # There is no disk yet, lots of the errors here are acceptable, and we'll ignore them.
@@ -840,8 +843,12 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         user_data_format_version = ami_tags.get('sci_version', '2')
         user_data_format_version = ami_tags.get('user_data_format_version', user_data_format_version)
 
+        data_device_type = params.get("data_device")
+
         if parse_version(user_data_format_version) >= parse_version('2'):
-            user_data = dict(scylla_yaml=dict(cluster_name=name), start_scylla_on_first_boot=False)
+            user_data = dict(scylla_yaml=dict(cluster_name=name),
+                             start_scylla_on_first_boot=False,
+                             data_device=data_device_type)
         else:
             user_data = ('--clustername %s '
                          '--totalnodes %s' % (name, sum(n_nodes)))

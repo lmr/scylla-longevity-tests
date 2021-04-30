@@ -27,3 +27,5 @@ gce_pd_ssd_disk_size_loader: 0
 gce_pd_ssd_disk_size_monitor: 0
 
 user_credentials_path: '~/.ssh/scylla-test'
+
+data_device: 'attached'

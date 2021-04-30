@@ -720,6 +720,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             else:
                 db_info['device_mappings'] = []
 
+        additional_ebs_volumes_num = self.params.get("aws_ebs_volume_num")
+        if additional_ebs_volumes_num > 0:
+            ebs = {"DeleteOnTermination": True,
+                   "VolumeType": self.params.get("aws_ebs_volume_type"),
+                   "VolumeSize": self.params.get('aws_ebs_volume_size')}
+
+            if ebs['VolumeType'] in ['io1', 'io2', 'gp3']:
+                ebs["Iops"] = self.params.get('aws_ebs_volume_iops')
+
+            for disk_char in "fghijklmnop"[:additional_ebs_volumes_num]:
+                ebs_volume = {
+                    "DeviceName": f"/dev/xvd{disk_char}",
+                    "Ebs": ebs
+                }
+
+                db_info['device_mappings'].append(ebs_volume)
+
+        self.log.debug(db_info['device_mappings'])
+
         if monitor_info['n_nodes'] is None:
             monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
         if monitor_info['type'] is None:
@@ -2372,6 +2391,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         This function will run fstrim command all db nodes in the cluster to clear any bad state of the disks.
         :return:
         """
+        # if used ebs volumes with aws backend fstrim is not supported
+        # fstrim: /var/lib/scylla: the discard operation is not supported
+        if self.db_cluster.is_ebs_volumes_attached():
+            self.log.info("fstrim is not supported on aws ebs volumes")
+            return
+
         for node in self.db_cluster.nodes:
             node.remoter.run('sudo fstrim -v /var/lib/scylla')
 

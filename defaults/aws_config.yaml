@@ -43,3 +43,9 @@ ami_id_db_scylla: ''
 ami_id_db_oracle: ''
 
 use_preinstalled_scylla: true
+
+data_device: 'instance_store'
+aws_ebs_volume_num: 0
+aws_ebs_volume_type: "gp2"
+aws_ebs_volume_size: 500
+aws_ebs_volume_iops: 10000 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3

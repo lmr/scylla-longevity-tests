@@ -1,0 +1,34 @@
+test_duration: 580
+
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=31250000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..31250000",
+                    "cassandra-stress write no-warmup cl=ALL n=31250000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=31250001..62500000",
+                    "cassandra-stress write no-warmup cl=ALL n=31250000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=62500001..93750000",
+                    "cassandra-stress write no-warmup cl=ALL n=31250000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=93750001..125000000"]
+
+
+stress_cmd_w: "cassandra-stress write no-warmup cl=ALL n=125000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..125000000"
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..125000000,62500000,125000000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=100' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..125000000,62500000,125000000)' "
+
+n_db_nodes: 3
+n_loaders: 4
+n_monitor_nodes: 1
+
+instance_type_loader: 'c5.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i3.2xlarge'
+
+user_prefix: 'perf-throughput-50-no-cache'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5'
+backtrace_decoding: false
+
+use_mgmt: true
+
+store_perf_results: true
+send_email: true
+email_recipients: ['alex.bykov@scylladb.com', 'roy@scylladb.com']
+backtrace_decoding: false

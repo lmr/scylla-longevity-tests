@@ -270,3 +270,7 @@
 | **<a href="#user-content-jepsen_test_cmd" name="jepsen_test_cmd">jepsen_test_cmd</a>**  | Jepsen test command (e.g., 'test-all') | test-all | SCT_JEPSEN_TEST_CMD
 | **<a href="#user-content-max_events_severities" name="max_events_severities">max_events_severities</a>**  | Limit severity level for event types | N/A | SCT_MAX_EVENTS_SEVERITIES
 | **<a href="#user-content-scylla_rsyslog_setup" name="scylla_rsyslog_setup">scylla_rsyslog_setup</a>**  | Configure rsyslog on scylla nodes to send logs to monitoring nodes | False | SCT_SCYLLA_RSYSLOG_SETUP
+| **<a href="#user-content-aws_ebs_volume_num" name="aws_ebs_volume_num">aws_ebs_volume_num</a>**  | Number of additional ebs volumes attached to instances | N/A | SCT_AWS_EBS_VOLUME_NUM
+| **<a href="#user-content-aws_ebs_volume_type" name="aws_ebs_volume_type">aws_ebs_volume_type</a>**  | Type of addtitional volumes: gp2|gp3|io2|io3 | N/A | SCT_AWS_EBS_VOLUME_IOPS
+| **<a href="#user-content-aws_ebs_volume_size" name="aws_ebs_volume_size">aws_ebs_volume_size</a>**  | Size of additional volume in GB | N/A | SCT_EBS_VOLUME_SIZE
+| **<a href="#user-content-aws_ebs_volume_iops" name="aws_ebs_volume_iops">aws_ebs_volume_iops</a>**  | Number of iops for ebs type io2|io3|gp3 | N/A | SCT_EBS_VOLUME_IOPS

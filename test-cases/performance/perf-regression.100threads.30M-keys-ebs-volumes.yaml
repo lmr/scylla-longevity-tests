@@ -1,0 +1,29 @@
+test_duration: 200
+
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=25 -pop seq=1..30000000"
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=30000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=25 -pop seq=1..30000000"
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=25 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=25 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+
+n_db_nodes: 3
+n_loaders: 4
+n_monitor_nodes: 1
+
+instance_type_db: 'r4.2xlarge'
+instance_type_loader: 'c4.2xlarge'
+instance_type_monitor: 't3.large'
+
+user_prefix: 'perf-regression'
+space_node_threshold: 644245094
+
+backtrace_decoding: false
+
+store_perf_results: true
+send_email: true
+email_recipients: ['alex.bykov@scylladb.com', 'roy@scylladb.com']
+
+data_device: 'attached'
+aws_ebs_volume_num: 2
+aws_ebs_volume_type: "gp2"
+aws_ebs_volume_size: 2000
+aws_ebs_volume_iops: 10000 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3
