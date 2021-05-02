@@ -1527,6 +1527,10 @@ class ClusterTester(db_stats.TestStatsMixin,
         cmd_select_all = 'select * from {}'
         cmd_bypass_cache = 'select * from {} bypass cache'
         cmd = random.choice([cmd_select_all, cmd_bypass_cache]).format(ks_cf)
+        if random.choice([True] * 2 + [False]):
+            cql_timeout_minutes = str(random.choice([2, 4, 8, 30, 120, 300]))
+            cql_timeout_param = f" USING TIMEOUT {cql_timeout_minutes}m"
+            cmd += cql_timeout_param
         try:
             credentials = self.db_cluster.get_db_auth()
             username, password = credentials if credentials else (None, None)
