@@ -73,7 +73,7 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
 from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
-from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version, get_systemd_version
+from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_systemd_version
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.filters import EventsFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -1656,9 +1656,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def get_scylla_build_id(self) -> Optional[str]:
         for scylla_executable in ("/usr/bin/scylla", "/opt/scylladb/libexec/scylla", ):
-            output = self.remoter.run(f"readelf -n {scylla_executable}", ignore_status=True).stdout
-            if match := BUILD_ID_RE.search(output):
-                return match.group("build_id")
+            build_id_result = self.remoter.run(f"{scylla_executable} --build-id", ignore_status=True)
+            if build_id_result.ok:
+                return build_id_result.stdout.strip()
         return None
 
     def get_scylla_debuginfo_file(self):
@@ -2254,8 +2254,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if result.ok:
             self.scylla_version_detailed = result.stdout.strip()
             if build_id := self.get_scylla_build_id():
+                self.scylla_version = self.scylla_version_detailed
                 self.scylla_version_detailed += f" with build-id {build_id}"
                 self.log.info(f"Found ScyllaDB version with details: {self.scylla_version_detailed}")
+            self.log.debug(f"self.scylla_version_detailed={self.scylla_version_detailed}")
         else:
             if self.distro.is_rhel_like:
                 cmd = f"rpm --query --queryformat '%{{VERSION}}' {self.scylla_pkg()}"
@@ -2263,6 +2265,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 cmd = f"dpkg-query --show --showformat '${{Version}}' {self.scylla_pkg()}"
             result = self.remoter.run(cmd, ignore_status=True)
 
+        cmd = ""
         if match := result.ok and SCYLLA_VERSION_RE.match(result.stdout):
             self.scylla_version = match.group().replace("~", ".")
             self.log.info("Found ScyllaDB version: %s", self.scylla_version)
@@ -2277,7 +2280,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not self.scylla_version_detailed:
             self.scylla_version_detailed = self.scylla_version
 
-        return self.scylla_version
+        return self.scylla_version_detailed
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):

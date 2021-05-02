@@ -96,9 +96,21 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
                 key = test_doc['_source']['versions'].get(value)
                 if key:
                     return key
+        else:
+            self.log.error('Scylla version is not found for test %s', test_doc['_id'])
+            return ''
 
-        self.log.error('Scylla version is not found for test %s', test_doc['_id'])
-        return None
+        res = dict()
+        if 'version' in test_doc['_source']['versions']:
+            res['version'] = test_doc['_source']['versions']['version']
+        if 'date' in test_doc['_source']['versions']:
+            res['date'] = test_doc['_source']['versions']['date']
+        if 'commit_id' in test_doc['_source']['versions']:
+            res['commit_id'] = test_doc['_source']['versions']['commit_id']
+        if 'build_id' in test_doc['_source']['versions']:
+            res['build_id'] = test_doc['_source']['versions']['build_id']
+
+        return res
 
     def get_events(self, event_severity=None):
         last_events = dict()
@@ -183,7 +195,12 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
         test_version_info = self._test_version(doc)
-        test_version = '.'.join([val for val in test_version_info.values()])
+        if test_version_info:
+            test_version = f"{test_version_info['version']}.{test_version_info['date']}.{test_version_info['commit_id']}"
+            build_id = test_version_info.get('build_id', '')
+        else:
+            test_version = ''
+            build_id = ''
 
         last_events, events_summary = self.get_events(event_severity=[
             Severity.CRITICAL, Severity.ERROR, Severity.WARNING])
@@ -201,6 +218,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             test_start_time=str(test_start_time),
             test_id=doc['_source']['test_details'].get('test_id', doc["_id"]),
             test_version=test_version,
+            build_id=build_id,
             setup_details=self._get_setup_details(doc, is_gce),
             grafana_snapshots=self._get_grafana_snapshot(doc),
             grafana_screenshots=self._get_grafana_screenshot(doc),

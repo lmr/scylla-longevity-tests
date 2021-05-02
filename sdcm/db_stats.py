@@ -453,6 +453,10 @@ class TestStatsMixin(Stats):
         versions = {}
         try:
             node = self.db_cluster.nodes[0]
+            if node.scylla_version_detailed and 'build-id' in node.scylla_version_detailed:
+                build_id = node.scylla_version_detailed.split('with build-id ')[-1]
+            else:
+                build_id = node.get_scylla_build_id()
             if node.is_rhel_like():
                 version_cmd = 'rpm -qa |grep scylla'
             else:
@@ -465,7 +469,8 @@ class TestStatsMixin(Stats):
                     if match:
                         versions[package.replace('-enterprise', '')] = {'version': match.group(2),
                                                                         'date': match.group(4),
-                                                                        'commit_id': match.group(5)}
+                                                                        'commit_id': match.group(5),
+                                                                        'build_id': build_id if build_id else ''}
         except Exception as ex:  # pylint: disable=broad-except
             LOGGER.error('Failed getting scylla versions: %s', ex)
 
