@@ -46,13 +46,22 @@ class NemesisElasticSearchPublisher:
     def publish(self, disrupt_name, status=True, data=None):
         test_data = self.stats
         assert test_data, "without self.stats data we can't publish nemesis ES"
+        if 'scylla-server' in test_data['versions']:
+            version = test_data['versions']['scylla-server']['version']
+            commit_id = test_data['versions']['scylla-server']['commit_id']
+        elif 'version' in test_data['versions'] and 'commit_id' in test_data['versions']:
+            version = test_data['versions']['version']
+            commit_id = test_data['versions']['commit_id']
+        else:
+            version = ''
+            commit_id = ''
 
         new_nemesis_data = dict(
             test_id=test_data['test_details']['test_id'],
             job_name=test_data['test_details']['job_name'],
             test_name=test_data['test_details']['test_name'],
-            scylla_version=test_data['versions']['scylla-server']['version'],
-            scylla_git_sha=test_data['versions']['scylla-server']['commit_id'],
+            scylla_version=version,
+            scylla_git_sha=commit_id,
         )
         if status:
             new_nemesis_data.update(
