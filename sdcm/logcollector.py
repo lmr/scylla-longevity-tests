@@ -1136,18 +1136,14 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                   tags={**self.tags, "NodeType": "loader", }))
 
     def get_running_cluster_sets(self, backend):
-        if backend == 'aws':
+        if backend in ("aws", "aws-siren", "k8s-eks"):
             self.get_aws_instances_by_testid()
-        elif backend == 'aws-siren':
-            self.get_aws_instances_by_testid()
-        elif backend == 'gce':
+        elif backend in ("gce", "gce-siren", "k8s-gke", "k8s-gce-minikube"):
             self.get_gce_instances_by_testid()
         elif backend == 'docker':
             self.get_docker_instances_by_testid()
-        elif backend == 'k8s-gce-minikube':
-            self.get_gce_instances_by_testid()
-        elif backend == 'k8s-gke':
-            self.get_gce_instances_by_testid()
+        else:
+            LOGGER.debug(f"get_running_cluster_sets: unknown backend type: {backend}")
 
     def run(self):
         """Run collect logs process as standalone operation
