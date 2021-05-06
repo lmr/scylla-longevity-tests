@@ -27,5 +27,3 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
-
-scylla_rsyslog_setup: true
