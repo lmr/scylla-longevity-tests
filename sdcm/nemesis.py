@@ -515,6 +515,25 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with self.cluster.cql_connection_patient(self.target_node) as session:
                 session.execute(f'DROP KEYSPACE keyspace_for_authenticator_switch')
 
+    def disrupt_rolling_config_change_internode_compression(self):
+        def get_internode_compression_new_value_randomly(current_compression):
+            self.log.debug(f"Current compression is {current_compression}")
+            values = ['dc', 'all', 'none']
+            values_to_toggle = list(filter(lambda value: value != current_compression, values))
+            return random.choice(values_to_toggle)
+
+        self._set_current_disruption('RollingConfigAndRandomSetCompressionOnAllNodes')
+        key = 'internode_compression'
+        with self.target_node.remote_scylla_yaml() as scylla_yaml:
+            current = scylla_yaml.get(key, 'dummy_value_no_internode_compression_key_and_value')
+        new_value = get_internode_compression_new_value_randomly(current)
+        for node in self.cluster.nodes:
+            self.log.debug(f"Changing {node} inter node compression to {new_value}")
+            with node.remote_scylla_yaml() as scylla_yaml:
+                scylla_yaml[key] = new_value
+            self.log.info(f"Restarting node {node}")
+            node.restart_scylla_server()
+
     def disrupt_restart_with_resharding(self):
         self._set_current_disruption('RestartNodeWithResharding %s' % self.target_node)
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
@@ -3689,6 +3708,15 @@ class ClusterRollingRestart(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_rolling_restart_cluster(random=False)
+
+
+class RollingRestartConfigChangeInternodeCompression(Nemesis):
+    disruptive = True
+    full_cluster_restart = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_rolling_config_change_internode_compression()
 
 
 class ClusterRollingRestartRandomOrder(Nemesis):
