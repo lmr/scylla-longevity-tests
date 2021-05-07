@@ -24,7 +24,7 @@ from tenacity import RetryError
 LOGGER = logging.getLogger('sdcm.wait')
 
 
-def wait_for(func, step=1, text=None, timeout=None, throw_exc=False, **kwargs):
+def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
     """
     Wrapper function to wait with timeout option.
 
