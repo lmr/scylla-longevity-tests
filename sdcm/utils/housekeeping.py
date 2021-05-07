@@ -53,7 +53,7 @@ class HousekeepingDB:
         self._cursor = self._connection.cursor()
 
     def execute(self, query: str, args: Optional[Sequence[Any]] = None) -> Sequence[Row]:
-        LOGGER.info("Query: `%s', Args: %s", query, args)
+        LOGGER.debug("Query: `%s', Args: %s", query, args)
         self._cursor.execute(query, args)
         result = self._cursor.fetchall()
         self._connection.commit()
