@@ -215,8 +215,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
             ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("rpm --query --queryformat '%{VERSION}' scylla", (0, "3.3.rc1", "")),
         ))
-        self.assertEqual(self.node.get_scylla_version(), "3.3.rc1")
-        self.assertEqual(self.node.scylla_version, "3.3.rc1")
+        self.assertEqual("3.3.rc1", self.node.get_scylla_version())
+        self.assertEqual("3.3.rc1", self.node.scylla_version)
 
     def test_no_scylla_binary_other(self):
         self.node.distro = Distro.DEBIAN9
@@ -224,33 +224,33 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
             ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
         ))
-        self.assertEqual(self.node.get_scylla_version(), "3.3.rc1")
-        self.assertEqual(self.node.scylla_version, "3.3.rc1")
+        self.assertEqual("3.3.rc1", self.node.get_scylla_version())
+        self.assertEqual("3.3.rc1", self.node.scylla_version)
 
     def test_scylla(self):
         self.node.remoter = VersionDummyRemote(self, (
             ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
             ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
         ))
-        self.assertEqual(self.node.get_scylla_version(), "3.3.rc1")
-        self.assertEqual(self.node.scylla_version, "3.3.rc1")
-        self.assertEqual(self.node.scylla_version_detailed, "3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx")
+        self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx", self.node.get_scylla_version())
+        self.assertEqual("3.3.rc1", self.node.scylla_version)
+        self.assertEqual("3.3.rc1-0.20200209.0d0c1d43188 with build-id xxx", self.node.scylla_version_detailed)
 
     def test_scylla_master(self):
         self.node.remoter = VersionDummyRemote(self, (
             ("/usr/bin/scylla --version", (0, "666.development-0.20200205.2816404f575\n", "")),
             ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
         ))
-        self.assertEqual(self.node.get_scylla_version(), "666.development")
-        self.assertEqual(self.node.scylla_version, "666.development")
+        self.assertEqual("666.development-0.20200205.2816404f575 with build-id xxx", self.node.get_scylla_version())
+        self.assertEqual("666.development", self.node.scylla_version)
 
     def test_scylla_master_new_format(self):
         self.node.remoter = VersionDummyRemote(self, (
             ("/usr/bin/scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
             ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
         ))
-        self.assertEqual(self.node.get_scylla_version(), "4.4.dev")
-        self.assertEqual(self.node.scylla_version, "4.4.dev")
+        self.assertEqual("4.4.dev-0.20200205.2816404f575 with build-id xxx", self.node.get_scylla_version())
+        self.assertEqual("4.4.dev", self.node.scylla_version)
 
     def test_scylla_enterprise(self):
         self.node.is_enterprise = True
@@ -258,8 +258,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
             ("/usr/bin/scylla --version", (0, "2019.1.4-0.20191217.b59e92dbd\n", "")),
             ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
         ))
-        self.assertEqual(self.node.get_scylla_version(), "2019.1.4")
-        self.assertEqual(self.node.scylla_version, "2019.1.4")
+        self.assertEqual("2019.1.4-0.20191217.b59e92dbd with build-id xxx", self.node.get_scylla_version())
+        self.assertEqual("2019.1.4", self.node.scylla_version)
 
     def test_scylla_enterprise_no_scylla_binary(self):
         self.node.is_enterprise = True
@@ -267,8 +267,8 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
             ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
         ))
-        self.assertEqual(self.node.get_scylla_version(), "2019.1.4")
-        self.assertEqual(self.node.scylla_version, "2019.1.4")
+        self.assertEqual("2019.1.4", self.node.get_scylla_version())
+        self.assertEqual("2019.1.4", self.node.scylla_version)
 
 
 class TestBaseMonitorSet(unittest.TestCase):

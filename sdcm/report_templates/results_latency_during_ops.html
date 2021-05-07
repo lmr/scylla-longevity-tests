@@ -11,7 +11,11 @@
         <span class="blue">{{ test_id }}</span>
         <br>
         <span>Scylla Server Version: </span>
-        <span class="blue">{{ test_version }} </span>
+        {% if build_id %}
+            <span class="blue">{{ test_version }} with build-id {{ build_id }}</span>
+        {% else %}
+            <span class="blue">{{ test_version }}</span>
+        {% endif %}
     </h3>
     <div>
         <span> Setup Details: </span>

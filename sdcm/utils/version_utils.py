@@ -53,8 +53,6 @@ SYSTEMD_VERSION_RE = re.compile(r"^systemd (?P<version>\d+)")
 
 REPOMD_XML_PATH = "repodata/repomd.xml"
 
-BUILD_ID_RE = re.compile(r"Build ID: (?P<build_id>\w+)")
-
 SCYLLA_URL_RESPONSE_TIMEOUT = 30
 SUPPORTED_XML_EXTENSIONS = ("xml", "xml.gz")
 SUPPORTED_FILE_EXTENSIONS = ("list", "repo", "Packages", "gz") + SUPPORTED_XML_EXTENSIONS
