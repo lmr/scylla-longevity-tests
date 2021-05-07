@@ -19,6 +19,8 @@ __author__ = 'Roy Dahan'
 import logging
 import random
 import time
+import re
+
 from collections import OrderedDict
 from uuid import UUID
 
@@ -30,6 +32,7 @@ from pkg_resources import parse_version
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.decorators import retrying
+from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 
 
 LOGGER = logging.getLogger(__name__)
@@ -46,7 +49,10 @@ class FillDatabaseData(ClusterTester):
     NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION = "2021.2.dev"
     NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION = "4.4.rc0"
     NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_ENTERPRISE_MIN_VERSION = "2021.2.dev"
+    CDC_SUPPORT_MIN_VERSION = "4.3"
+    CDC_SUPPORT_MIN_ENTERPRISE_VERSION = "2021"
 
+    base_ks = "keyspace_fill_db_data"
     # List of dictionaries for all items tables and their data
     all_verification_items = [
         # order_by_with_in_test: Check that order-by works with IN
@@ -81,7 +87,7 @@ class FillDatabaseData(ClusterTester):
                                 firstname text,
                                 lastname text,
                                 age int
-                            ) WITH compaction = {'class': 'LeveledCompactionStrategy'};"""],
+                            ) WITH compaction = {'class': 'LeveledCompactionStrategy'}"""],
             'truncates': ['TRUNCATE static_cf_test'],
             'inserts': [
                 "INSERT INTO static_cf_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -104,7 +110,7 @@ class FillDatabaseData(ClusterTester):
                             firstname text,
                             lastname text,
                             age int
-                        ) WITH compaction = {'class': 'DateTieredCompactionStrategy'};"""],
+                        ) WITH compaction = {'class': 'DateTieredCompactionStrategy'}"""],
             'truncates': ['TRUNCATE static_cf_test_batch'],
             'inserts': [
                 "INSERT INTO static_cf_test_batch (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -131,7 +137,7 @@ class FillDatabaseData(ClusterTester):
                                 lastname ascii,
                                 age int
                             ) WITH COMPACT STORAGE
-                            AND compaction = {'class': 'TimeWindowCompactionStrategy'};"""],
+                            AND compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
             'truncates': ['TRUNCATE noncomposite_static_cf_test'],
             'inserts': [
                 "INSERT INTO noncomposite_static_cf_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -157,7 +163,7 @@ class FillDatabaseData(ClusterTester):
                                 lastname ascii,
                                 age int
                             ) WITH COMPACT STORAGE
-                            AND compaction = {'class': 'SizeTieredCompactionStrategy'};"""],
+                            AND compaction = {'class': 'SizeTieredCompactionStrategy'}"""],
             'truncates': ['TRUNCATE noncomposite_static_cf_test_batch'],
             'inserts': [
                 "INSERT INTO noncomposite_static_cf_test_batch (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -183,7 +189,7 @@ class FillDatabaseData(ClusterTester):
                                 time bigint,
                                 PRIMARY KEY (userid, url)
                             ) WITH COMPACT STORAGE
-                            AND compaction = {'class': 'LeveledCompactionStrategy'};"""],
+                            AND compaction = {'class': 'LeveledCompactionStrategy'}"""],
             'truncates': ['TRUNCATE dynamic_cf_test'],
             'inserts': [
                 "INSERT INTO dynamic_cf_test (userid, url, time) VALUES (550e8400-e29b-41d4-a716-446655440000, 'http://foo.bar', 42)",
@@ -215,7 +221,7 @@ class FillDatabaseData(ClusterTester):
                                       time bigint,
                                       PRIMARY KEY (userid, ip, port)
                                       ) WITH COMPACT STORAGE
-                                      AND compaction = {'class': 'DateTieredCompactionStrategy'};"""],
+                                      AND compaction = {'class': 'DateTieredCompactionStrategy'}"""],
             'truncates': ['TRUNCATE dense_cf_test'],
             'inserts': [
                 "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (550e8400-e29b-41d4-a716-446655440000, '192.168.0.1', 80, 42)",
@@ -264,7 +270,7 @@ class FillDatabaseData(ClusterTester):
                                 body ascii,
                                 posted_by ascii,
                                 PRIMARY KEY (userid, posted_month, posted_day)
-                            ) WITH compaction = {'class': 'TimeWindowCompactionStrategy'};"""],
+                            ) WITH compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
             'truncates': ['TRUNCATE sparse_cf_test'],
             'inserts': [
                 "INSERT INTO sparse_cf_test (userid, posted_month, posted_day, body, posted_by) VALUES (550e8400-e29b-41d4-a716-446655440000, 1, 12, 'Something else', 'Frodo Baggins')",
@@ -293,7 +299,7 @@ class FillDatabaseData(ClusterTester):
                                 url text,
                                 time bigint,
                                 PRIMARY KEY (userid, url)
-                            ) WITH COMPACT STORAGE;"""],
+                            ) WITH COMPACT STORAGE"""],
             'truncates': ['TRUNCATE limit_ranges_test'],
             'inserts': [
                 "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
@@ -314,7 +320,7 @@ class FillDatabaseData(ClusterTester):
                                 url text,
                                 time bigint,
                                 PRIMARY KEY (userid, url)
-                            ) WITH COMPACT STORAGE;"""],
+                            ) WITH COMPACT STORAGE"""],
             'truncates': ['TRUNCATE limit_multiget_test'],
             'inserts': [
                 "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id,
@@ -360,7 +366,7 @@ class FillDatabaseData(ClusterTester):
                 month text,
                 year int,
                 PRIMARY KEY (userid, url)
-            );"""],
+            )"""],
             'truncates': ['TRUNCATE limit_sparse_test'],
             'inserts': [
                 "INSERT INTO limit_sparse_test (userid, url, day, month, year) VALUES ({}, 'http://foo.{}', 1, 'jan', 2012)".format(
@@ -382,7 +388,7 @@ class FillDatabaseData(ClusterTester):
                 url text,
                 total counter,
                 PRIMARY KEY (userid, url)
-            ) WITH COMPACT STORAGE;"""],
+            ) WITH COMPACT STORAGE"""],
             'truncates': ['TRUNCATE counters_test'],
             'inserts': [
                 "UPDATE counters_test SET total = total + 1 WHERE userid = 1 AND url = 'http://foo.com'",
@@ -415,7 +421,7 @@ class FillDatabaseData(ClusterTester):
                                   userid uuid PRIMARY KEY,
                                   firstname text,
                                   lastname text,
-                                  age int);""",
+                                  age int)""",
                               'CREATE INDEX byAge ON indexed_with_eq_test(age);'],
             'truncates': ['TRUNCATE indexed_with_eq_test'],
             'inserts': [
@@ -439,7 +445,7 @@ class FillDatabaseData(ClusterTester):
                                   userid uuid PRIMARY KEY,
                                   firstname text,
                                   lastname text,
-                                  age int);""",
+                                  age int)""",
                               'CREATE MATERIALIZED VIEW mv_byAge as SELECT * from mv_with_eq_test WHERE userid IS NOT NULL and age IS NOT NULL PRIMARY KEY (age, userid);'],
             'truncates': ['TRUNCATE mv_with_eq_test'],
             'inserts': [
@@ -463,7 +469,7 @@ class FillDatabaseData(ClusterTester):
                                   firstname text,
                                   lastname text,
                                   age int,
-                                  PRIMARY KEY(userid, age));"""],
+                                  PRIMARY KEY(userid, age))"""],
             'truncates': ['TRUNCATE select_key_in_test'],
             'inserts': [
                 "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
@@ -485,7 +491,7 @@ class FillDatabaseData(ClusterTester):
                                   c int,
                                   v int,
                                   PRIMARY KEY (k, c)
-                                    ) WITH COMPACT STORAGE;"""],
+                                    ) WITH COMPACT STORAGE"""],
             'truncates': ['TRUNCATE exclusive_slice_test'],
             'inserts': [
                 """BEGIN BATCH
@@ -528,13 +534,13 @@ class FillDatabaseData(ClusterTester):
                                                         k int,
                                                         c int,
                                                         v int,
-                                                        PRIMARY KEY (k, c)) WITH COMPACT STORAGE;""",
+                                                        PRIMARY KEY (k, c)) WITH COMPACT STORAGE""",
                               """CREATE TABLE in_clause_wide_rows_test2 (
                                         k int,
                                         c1 int,
                                         c2 int,
                                         v int,
-                                        PRIMARY KEY (k, c1, c2)) WITH COMPACT STORAGE;"""
+                                        PRIMARY KEY (k, c1, c2)) WITH COMPACT STORAGE"""
                               ],
             'truncates': ['TRUNCATE in_clause_wide_rows_test1', 'TRUNCATE in_clause_wide_rows_test2'],
             'inserts': [
@@ -579,7 +585,7 @@ class FillDatabaseData(ClusterTester):
                                 c int,
                                 v int,
                                 PRIMARY KEY (k, c)
-                            ) WITH COMPACT STORAGE;""",
+                            ) WITH COMPACT STORAGE""",
                               """CREATE TABLE order_by_test2 (
                 k int,
                 c1 int,
@@ -714,14 +720,14 @@ class FillDatabaseData(ClusterTester):
                                 c int,
                                 v int,
                                 PRIMARY KEY (k, c)
-                            ) WITH CLUSTERING ORDER BY (c DESC);""",
+                            ) WITH CLUSTERING ORDER BY (c DESC)""",
                               """CREATE TABLE reversed_comparator_test2 (
                 k int,
                 c1 int,
                 c2 int,
                 v text,
                 PRIMARY KEY (k, c1, c2)
-            ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC);"""],
+            ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC)"""],
             'truncates': ['TRUNCATE reversed_comparator_test1', 'TRUNCATE reversed_comparator_test2'],
             'inserts': [f"INSERT INTO reversed_comparator_test1 (k, c, v) VALUES (0, {x}, {x})" for x in
                         range(0, 10)] + [
@@ -754,7 +760,7 @@ class FillDatabaseData(ClusterTester):
                                 c int,
                                 v1 int,
                                 v2 set<text>,
-                                PRIMARY KEY (k, c));"""],
+                                PRIMARY KEY (k, c))"""],
             'truncates': ['TRUNCATE order_by_validation_test'],
             'inserts': [
                 "INSERT INTO null_support_test (k, c, v1, v2) VALUES (0, 0, null, {'1', '2'})",
@@ -861,14 +867,14 @@ class FillDatabaseData(ClusterTester):
                                 name varchar,
                                 stuff varchar,
                                 PRIMARY KEY(username, id)
-                            );""",
+                            )""",
                               """CREATE TABLE deletion_test2 (
                 username varchar,
                 id int,
                 name varchar,
                 stuff varchar,
                 PRIMARY KEY(username, id, name)
-            ) WITH COMPACT STORAGE;"""],
+            ) WITH COMPACT STORAGE"""],
             'truncates': ['TRUNCATE deletion_test1', 'TRUNCATE deletion_test2'],
             'inserts': [
                 "INSERT INTO deletion_test1 (username, id, name, stuff) VALUES ('abc', 2, 'rst', 'some value')",
@@ -1056,7 +1062,7 @@ class FillDatabaseData(ClusterTester):
                             v1 int,
                             v2 int,
                             PRIMARY KEY (k, c1, c2)
-                        );"""],
+                        )"""],
             'truncates': [],
             'inserts': ["INSERT INTO range_tombstones_test (k, c1, c2, v1, v2) VALUES (%d, %d, %d, %d, %d)" % (
                 i, j, k, (i * 4) + (j * 2) + k, (i * 4) + (j * 2) + k) for i in range(0, 5) for j in range(0, 2)
@@ -1115,7 +1121,7 @@ class FillDatabaseData(ClusterTester):
                             c2 int,
                             v1 text,
                             PRIMARY KEY (k, c1, c2)
-                        );"""],
+                        )"""],
             'truncates': [],
             'inserts': ["INSERT INTO range_tombstones_compaction_test (k, c1, c2, v1) VALUES (0, %d, %d, '%s')" % (
                 c1, c2, '%i%i' % (c1, c2)) for c1 in range(0, 4) for c2 in range(0, 2)],
@@ -1141,7 +1147,7 @@ class FillDatabaseData(ClusterTester):
                              v1 int,
                              v2 int,
                              PRIMARY KEY (k, c1, c2)
-                        );"""],
+                        )"""],
             'truncates': ["TRUNCATE delete_row_test"],
             'inserts': [
                 "INSERT INTO delete_row_test(k, c1, c2, v1, v2) VALUES (%d, %d, %d, %d, %d)" % (0, 0, 0, 0, 0),
@@ -1156,7 +1162,7 @@ class FillDatabaseData(ClusterTester):
             'skip': ''},
         # range_query_2ndary_test: Test range queries with 2ndary indexes CASSANDRA-4257
         {
-            'create_tables': ["CREATE TABLE range_query_2ndary_test (id int primary key, row int, setid int);",
+            'create_tables': ["CREATE TABLE range_query_2ndary_test (id int primary key, row int, setid int)",
                               "CREATE INDEX indextest_setid_idx ON range_query_2ndary_test (setid)"],
             'truncates': ["TRUNCATE range_query_2ndary_test"],
             'inserts': [
@@ -1285,7 +1291,7 @@ class FillDatabaseData(ClusterTester):
                             L list<int>,
                             M map<text, int>,
                             S set<int>
-                        );"""],
+                        )"""],
             'truncates': ["TRUNCATE multi_collection_test"],
             'inserts': [
                 "UPDATE multi_collection_test SET L = [1, 3, 5] WHERE k = b017f48f-ae67-11e1-9096-005056c00008;",
@@ -1333,7 +1339,7 @@ class FillDatabaseData(ClusterTester):
                 v int,
                 PRIMARY KEY ((k1, k2), c)
             )
-        """],
+            """],
             'truncates': ["TRUNCATE composite_row_key_test"],
             'inserts': [
                 f"INSERT INTO composite_row_key_test (k1, k2, c, v) VALUES (0, {i}, {i}, {i})" for i
@@ -1390,6 +1396,7 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'skip': ''},
         # only_pk_test
+        # disabled temprorary due to issue #8410
         {
             'create_tables': [
                 """CREATE TABLE only_pk_test1 (
@@ -1421,7 +1428,8 @@ class FillDatabaseData(ClusterTester):
                         [[x, y] for x in range(0, 2) for y in range(0, 2)]],
             'min_version': '',
             'max_version': '',
-            'skip': ''},
+            'skip': '',
+            'no_cdc': "require #8410"},
         # no_clustering_test
         {
             'create_tables': ["CREATE TABLE no_clustering_test (k int PRIMARY KEY, v int)"],
@@ -1450,7 +1458,7 @@ class FillDatabaseData(ClusterTester):
                     CREATE TABLE range_slice_test (
                         k text PRIMARY KEY,
                         v int
-                    );
+                    )
                 """],
             'truncates': ["TRUNCATE range_slice_test"],
             'inserts': ["INSERT INTO range_slice_test (k, v) VALUES ('foo', 0)",
@@ -1513,12 +1521,12 @@ class FillDatabaseData(ClusterTester):
                         d int,
                         e int,
                         PRIMARY KEY (a, b)
-                    );""", """
+                    )""", """
                     CREATE TABLE limit_bugs_test2 (
                         a int primary key,
                         b int,
                         c int,
-                    );
+                    )
                 """],
             'truncates': ["TRUNCATE limit_bugs_test1", "TRUNCATE limit_bugs_test2"],
             'inserts': ["INSERT INTO limit_bugs_test1 (a, b, c, d, e) VALUES (1, 1, 1, 1, 1);",
@@ -1586,7 +1594,7 @@ class FillDatabaseData(ClusterTester):
                         col2 int,
                         value varchar,
                         PRIMARY KEY (my_id, col1, col2)
-                    );"""],
+                    )"""],
             'truncates': ["TRUNCATE order_by_multikey_test"],
             'inserts': [
                 "INSERT INTO order_by_multikey_test(my_id, col1, col2, value) VALUES ( 'key1', 1, 1, 'a');",
@@ -1666,7 +1674,7 @@ class FillDatabaseData(ClusterTester):
         # refuse_in_with_indexes_test: Test for the validation bug of CASSANDRA-4709
         {
             'create_tables': [
-                """create table refuse_in_with_indexes_test (pk varchar primary key, col1 varchar, col2 varchar);""",
+                """create table refuse_in_with_indexes_test (pk varchar primary key, col1 varchar, col2 varchar)""",
                 "create index refuse_in_with_indexes_test1 on refuse_in_with_indexes_test(col1);",
                 "create index refuse_in_with_indexes_test2 on refuse_in_with_indexes_test(col2);"],
             'truncates': ["TRUNCATE refuse_in_with_indexes_test"],
@@ -1694,13 +1702,13 @@ class FillDatabaseData(ClusterTester):
                 v int,
                 PRIMARY KEY (k, c)
             ) WITH COMPACT STORAGE
-              AND CLUSTERING ORDER BY (c DESC);""", """
+              AND CLUSTERING ORDER BY (c DESC)""", """
                     CREATE TABLE reversed_compact_test2 (
                         k text,
                         c int,
                         v int,
                         PRIMARY KEY (k, c)
-                    ) WITH COMPACT STORAGE;
+                    ) WITH COMPACT STORAGE
                 """],
             'truncates': ["TRUNCATE reversed_compact_test1", "TRUNCATE reversed_compact_test2"],
             'inserts': [
@@ -1745,7 +1753,7 @@ class FillDatabaseData(ClusterTester):
                 value text,
                 PRIMARY KEY(key, c1, c2)
                 ) WITH COMPACT STORAGE
-                  AND CLUSTERING ORDER BY(c1 DESC, c2 DESC);
+                  AND CLUSTERING ORDER BY(c1 DESC, c2 DESC)
         """],
             'truncates': ["TRUNCATE reversed_compact_multikey_test"],
             'inserts': [
@@ -1863,7 +1871,7 @@ class FillDatabaseData(ClusterTester):
                 c1 int,
                 c2 int,
                 PRIMARY KEY (k, c1, c2)
-            ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC);"""],
+            ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC)"""],
             'truncates': ["TRUNCATE multiordering_test"],
             'inserts': ["INSERT INTO multiordering_test(k, c1, c2) VALUES ('foo', %i, %i)" % (i, j) for i in
                         range(0, 2) for j in
@@ -1894,7 +1902,7 @@ class FillDatabaseData(ClusterTester):
                 c2 int,
                 v int,
                 PRIMARY KEY (k, c1, c2)
-            ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC);"""],
+            ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC)"""],
             'truncates': ["TRUNCATE returned_null_test"],
             'inserts': ["INSERT INTO returned_null_test (k, c1, c2, v) VALUES (0, 0, 0, 0);",
                         "INSERT INTO returned_null_test (k, c1, c2, v) VALUES (0, 1, 1, 1);",
@@ -1957,7 +1965,7 @@ class FillDatabaseData(ClusterTester):
                     k int PRIMARY KEY,
                     v1 int,
                     v2 int,
-                ) WITH caching = {'keys': 'NONE', 'rows_per_partition': 'ALL'};
+                ) WITH caching = {'keys': 'NONE', 'rows_per_partition': 'ALL'}
             """],
             'truncates': ["TRUNCATE truncate_clean_cache_test"],
             'inserts': ["INSERT INTO truncate_clean_cache_test(k, v1, v2) VALUES (%d, %d, %d)" % (i, i, i * 2) for i
@@ -2009,7 +2017,7 @@ class FillDatabaseData(ClusterTester):
         # composite_partition_key_validation_test: Test for bug from CASSANDRA-5122
         {
             'create_tables': [
-                "CREATE TABLE composite_partition_key_validation_test (a int, b text, c uuid, PRIMARY KEY ((a, b)));"],
+                "CREATE TABLE composite_partition_key_validation_test (a int, b text, c uuid, PRIMARY KEY ((a, b)))"],
             'truncates': ["TRUNCATE composite_partition_key_validation_test"],
             'inserts': [
                 "INSERT INTO composite_partition_key_validation_test (a, b, c) VALUES (1, 'aze', 4d481800-4c5f-11e1-82e0-3f484de45426)",
@@ -2180,7 +2188,7 @@ class FillDatabaseData(ClusterTester):
                 """CREATE TABLE compact_metadata_test (
                 id int primary key,
                 i int
-            ) WITH COMPACT STORAGE;"""],
+            ) WITH COMPACT STORAGE"""],
             'truncates': ["TRUNCATE compact_metadata_test"],
             'inserts': ["INSERT INTO compact_metadata_test (id, i) VALUES (1, 2);"],
             'queries': ["SELECT * FROM compact_metadata_test"],
@@ -2562,7 +2570,7 @@ class FillDatabaseData(ClusterTester):
             'skip': ''},
         # cas_simple_test
         {
-            'create_tables': ["CREATE TABLE cas_simple_test (tkn int, consumed boolean, PRIMARY KEY (tkn));"],
+            'create_tables': ["CREATE TABLE cas_simple_test (tkn int, consumed boolean, PRIMARY KEY (tkn))"],
             'truncates': ["TRUNCATE cas_simple_test"],
             'inserts': [],
             'queries': [[["INSERT INTO cas_simple_test (tkn, consumed) VALUES ({},FALSE);".format(k),
@@ -2855,7 +2863,7 @@ class FillDatabaseData(ClusterTester):
         # select_count_paging_test: Test for the CASSANDRA-6579 'select count' paging bug
         {
             'create_tables': [
-                "create table select_count_paging_test(field1 text, field2 timeuuid, field3 boolean, primary key(field1, field2));",
+                "create table select_count_paging_test(field1 text, field2 timeuuid, field3 boolean, primary key(field1, field2))",
                 "create index test_index on select_count_paging_test(field3);"],
             'truncates': ["TRUNCATE select_count_paging_test"],
             'inserts': [
@@ -2963,9 +2971,16 @@ class FillDatabaseData(ClusterTester):
     ]
 
     @staticmethod
+    def _get_table_name_from_query(query):
+        regexp = re.compile(r"create table (?P<table_name>[a-z0-9_]+)\s?", re.MULTILINE | re.IGNORECASE)
+        match = regexp.search(query)
+        if match:
+            return match.groupdict()["table_name"]
+
+    @staticmethod
     def cql_create_simple_tables(session, rows):
         """ Create tables for truncate test """
-        create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int)"
+        create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int) with cdc = {'enabled': true, 'ttl': 0}"
         for i in range(rows):
             session.execute(create_query % i)
             # Added sleep after each created table
@@ -3003,6 +3018,27 @@ class FillDatabaseData(ClusterTester):
             # Insert data to the tables
             self.cql_insert_data_to_simple_tables(session, rows=insert_rows)
 
+    def _enable_cdc(self, item, create_table):
+        cdc_properties = "cdc = {'enabled': true, 'preimage': true, 'postimage': true, 'ttl': 36000}"
+
+        if item.get("no_cdc"):
+            self.log.warning(f"Skip adding cdc enabling properties due {item['no_cdc']}")
+            return create_table
+
+        if "CREATE TABLE" in create_table.upper() and "COUNTER" not in create_table.upper():
+            create_table = create_table.replace(";", "")
+            table_name = self._get_table_name_from_query(create_table)
+            if " WITH " in create_table.upper():
+                create_table = f"{create_table} AND {cdc_properties}"
+            else:
+                create_table = f"{create_table} WITH {cdc_properties}"
+            # set cdc table name
+            if not item.get("cdc_tables"):
+                item["cdc_tables"] = {}
+            item["cdc_tables"][f"{table_name}{CDC_LOGTABLE_SUFFIX}"] = None
+
+        return create_table
+
     def cql_create_tables(self, session):
         truncates = []
         # Run through the list of items and create all tables
@@ -3019,11 +3055,15 @@ class FillDatabaseData(ClusterTester):
             # As of now it behaves as "run_condition".
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 for create_table in item['create_tables']:
+                    if self.version_cdc_support():
+                        create_table = self._enable_cdc(item, create_table)
                     # wait a while before creating index, there is a delay of create table for waiting the schema agreement
                     if 'CREATE INDEX' in create_table.upper():
                         time.sleep(15)
                     self.log.debug(f"create table: {create_table}")
                     session.execute(create_table)
+                    # sleep for 15 seconds to wait creating cdc tables
+                    time.sleep(15)
                     if 'CREATE TYPE' in create_table.upper():
                         time.sleep(15)
                 for truncate in item['truncates']:
@@ -3067,7 +3107,21 @@ class FillDatabaseData(ClusterTester):
         else:
             version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
 
-        return parse_version(scylla_version) >= parse_version(version_with_support)
+        if parse_version(scylla_version) < parse_version(version_with_support):
+            return False  # current version doesn't support non-frozen UDT
+        else:
+            return True  # current version supports non-frozen UDT
+
+    def version_cdc_support(self):
+        scylla_version, is_enterprise = self.get_scylla_version()
+        if is_enterprise:
+            version_with_support = self.CDC_SUPPORT_MIN_ENTERPRISE_VERSION
+        else:
+            version_with_support = self.CDC_SUPPORT_MIN_VERSION
+        if parse_version(scylla_version) < parse_version(version_with_support):
+            return False
+        else:
+            return True
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
     def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
@@ -3106,13 +3160,16 @@ class FillDatabaseData(ClusterTester):
                     # Referencing https://github.com/scylladb/scylla-enterprise/issues/1177#issuecomment-568762357
                     if 'list<' in item['create_tables'][0]:
                         time.sleep(1)
+                if item.get("cdc_tables"):
+                    for cdc_table in item["cdc_tables"]:
+                        item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
 
     def run_db_queries(self, session, default_fetch_size):
         # pylint: disable=too-many-branches,too-many-nested-blocks
 
         for item in self.all_verification_items:
             # Some queries contains statement of switch keyspace, reset keyspace at the beginning
-            session.set_keyspace("keyspace_fill_db_data")
+            session.set_keyspace(self.base_ks)
             # TODO: fix following condition to make "skip_condition" really skip stuff
             # when it is True, not False as it is now.
             # As of now it behaves as "run_condition".
@@ -3145,9 +3202,31 @@ class FillDatabaseData(ClusterTester):
                     for i in range(len(item['invalid_queries'])):
                         try:
                             session.execute(item['invalid_queries'][i])
-                            self.fail("query '%s' is not valid" % item['invalid_queries'][i])
+                            # self.fail("query '%s' is not valid" % item['invalid_queries'][i])
+                            LOGGER.error("query '%s' is valid", item['invalid_queries'][i])
                         except InvalidRequest as ex:
                             LOGGER.debug("Found error '%s' as expected", ex)
+
+                if item.get("cdc_tables"):
+                    for cdc_table in item["cdc_tables"]:
+                        actual_result = self.get_cdc_log_rows(session, cdc_table)
+                        # try..except mainly added to avoid test termination
+                        # because  Row(f=inf) in different select query is not equal
+                        try:
+                            assert all([row in actual_result for row in item["cdc_tables"][cdc_table]]), \
+                                f"cdc tables content are differes\n Initial:{item['cdc_tables'][cdc_table]}\nNew_result: {actual_result}"
+                        except AssertionError as err:
+                            LOGGER.error(f"content was differ {err}")
+
+                # udpate cdc log tables after queries,
+                # which could change base table content
+                if item.get("cdc_tables"):
+                    for cdc_table in item["cdc_tables"]:
+                        item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
+                        LOGGER.debug(item["cdc_tables"][cdc_table])
+
+    def get_cdc_log_rows(self, session, cdc_log_table):
+        return list(session.execute(f"select * from {self.base_ks}.{cdc_log_table}"))
 
     def fill_db_data(self):
         """
@@ -3162,7 +3241,7 @@ class FillDatabaseData(ClusterTester):
             session.default_consistency_level = ConsistencyLevel.QUORUM
             # clean original test data by truncate
             try:
-                session.set_keyspace("keyspace_fill_db_data")
+                session.set_keyspace(self.base_ks)
                 self.truncate_tables(session)
             except Exception as ex:  # pylint: disable=broad-except
                 LOGGER.debug("Found error in truncate tables: '%s'", ex)
@@ -3181,11 +3260,11 @@ class FillDatabaseData(ClusterTester):
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
-            session.execute("""
-                CREATE KEYSPACE IF NOT EXISTS keyspace_fill_db_data
-                WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+            session.execute(f"""
+                CREATE KEYSPACE IF NOT EXISTS {self.base_ks}
+                WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': '3'}} AND durable_writes = true;
                 """)
-            session.set_keyspace("keyspace_fill_db_data")
+            session.set_keyspace(self.base_ks)
 
             # Create all tables according the above list
             self.cql_create_tables(session)
@@ -3193,7 +3272,7 @@ class FillDatabaseData(ClusterTester):
     def verify_db_data(self):
         # Prepare connection
         node = self.db_cluster.nodes[0]
-        with self.db_cluster.cql_connection_patient(node, keyspace='keyspace_fill_db_data') as session:
+        with self.db_cluster.cql_connection_patient(node, keyspace=self.base_ks) as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
             self.run_db_queries(session, session.default_fetch_size)

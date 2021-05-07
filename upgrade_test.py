@@ -516,6 +516,19 @@ class UpgradeTest(FillDatabaseData):
         self.metric_has_data(
             metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
+        # start gemini write workload
+        # and cdc log reader
+        if self.version_cdc_support():
+            self.log.info("Start gemini and cdc stressor during upgrade")
+            gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
+            time.sleep(30)
+            # Let to write_stress_during_entire_test complete the schema changes
+            self.metric_has_data(
+                metric_query='gemini_cql_requests', n=10)
+
+            cdc_reader_thread = self.run_cdclog_reader_thread(self.params.get("stress_cdclog_reader_cmd"),
+                                                              keyspace_name="ks1", base_table_name="table1")
+
         with ignore_upgrade_schema_errors():
 
             step = 'Step1 - Upgrade First Node '
@@ -689,11 +702,16 @@ class UpgradeTest(FillDatabaseData):
         # Issue #https://github.com/scylladb/scylla-enterprise/issues/1391
         # By Eliran's comment: For 'Failed to load schema version' error which is expected and non offensive is
         # to count the 'workload prioritization' warning and subtract that amount from the amount of overall errors.
-        load_error_num = schema_load_error_num-workload_prioritization_error_num
+        load_error_num = schema_load_error_num - workload_prioritization_error_num
         assert load_error_num <= error_factor * 8 * \
             len(self.db_cluster.nodes), 'Only allowing shards_num * %d schema load errors per host during the ' \
                                         'entire test, actual: %d' % (
                 error_factor, schema_load_error_num)
+
+        self.log.info('Step10 - Verify that gemini and cdc stressor are not failed during upgrade')
+        if self.version_cdc_support():
+            self.verify_gemini_results(queue=gemini_thread)
+            self.verify_cdclog_reader_results(cdc_reader_thread)
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
 
