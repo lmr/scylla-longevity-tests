@@ -86,7 +86,8 @@ class DefinitionBuilder(abc.ABC):
                                   root_disk_size=self.params.get(mapper.root_disk_size),
                                   tags=tags,
                                   ssh_key=self._get_ssh_key(),
-                                  user_data=user_data
+                                  user_data=user_data,
+                                  instance_index=index
                                   )
 
     def build_region_definition(self, region: str, n_db_nodes: int, n_loader_nodes: int, n_monitor_nodes: int) -> RegionDefinition:

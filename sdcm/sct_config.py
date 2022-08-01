@@ -21,7 +21,7 @@ import ast
 import logging
 import getpass
 import pathlib
-from typing import List, Union, Set
+from typing import List, Union, Set, Any
 
 from distutils.util import strtobool
 
@@ -1662,12 +1662,12 @@ class SCTConfiguration(dict):
             if opt["name"] in self and (opt["env"] not in os.environ or replace):
                 os.environ[opt["env"]] = str(self[opt["name"]])
 
-    def get(self, key: str):
+    def get(self, key: str, default: Any | None = None):
         """
         get the value of test configuration parameter by the name
         """
 
-        ret_val = super().get(key)
+        ret_val = super().get(key, default)
 
         if key in self.multi_region_params and isinstance(ret_val, list):
             ret_val = ' '.join(ret_val)

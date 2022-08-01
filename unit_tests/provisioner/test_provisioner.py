@@ -74,7 +74,8 @@ def definition(image_id, image_type):
         user_name="tester",
         ssh_key=KeyStore().get_ec2_ssh_key_pair(),
         tags={'test-tag': 'test_value'},
-        user_data=[PrintingTestUserDataObject()]
+        user_data=[PrintingTestUserDataObject()],
+        instance_index=3
     )
 
 

@@ -17,6 +17,8 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Dict
 
+from libcloud.compute.base import Node
+
 from sdcm.keystore import SSHKey
 from sdcm.provision.user_data import UserDataObject
 
@@ -27,10 +29,9 @@ class VmArch(Enum):
 
 
 @dataclass
-class DataDisk:
-    type: str
-    size: int
-    iops: int
+class DataDisk(ABC):
+    type: str = None
+    size: int = None
 
 
 @dataclass
@@ -39,13 +40,15 @@ class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     image_id: str
     type: str   # instance_type from yaml
     user_name: str
-    ssh_key: SSHKey = field(repr=False)
+    ssh_key: SSHKey | str = field(repr=False)
     tags: Dict[str, str] = field(default_factory=dict)
     arch: VmArch = VmArch.X86
+    instance_index: int | None = None
     root_disk_size: int | None = None
     data_disks: List[DataDisk] | None = None
     user_data: List[UserDataObject] | None = field(
         default_factory=list, repr=False)  # None when no cloud-init use at all
+    startup_script: str | None = None
 
 
 class ProvisionError(Exception):
@@ -80,6 +83,11 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
     image: str
     creation_time: datetime | None
     _provisioner: "Provisioner"
+    _node: Node = None
+
+    @property
+    def node(self):
+        return self._node
 
     def terminate(self, wait: bool = True) -> None:
         """terminates VM instance.

@@ -809,8 +809,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('gce_instance_type_loader')
-        if loader_info['disk_type'] is None:
-            loader_info['disk_type'] = self.params.get('gce_root_disk_type_loader')
+        if loader_info['root_disk_type'] is None:
+            loader_info['root_disk_type'] = self.params.get('gce_root_disk_type_loader')
         if loader_info['disk_size'] is None:
             loader_info['disk_size'] = self.params.get('root_disk_size_loader')
         if loader_info['n_local_ssd'] is None:
@@ -830,8 +830,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             db_info['type'] = 'custom-{}-{}-ext'.format(cpu, int(mem) * 1024)
         if db_info['type'] is None:
             db_info['type'] = self.params.get('gce_instance_type_db')
-        if db_info['disk_type'] is None:
-            db_info['disk_type'] = self.params.get('gce_root_disk_type_db')
+        if db_info['root_disk_type'] is None:
+            db_info['root_disk_type'] = self.params.get('gce_root_disk_type_db')
         if db_info['disk_size'] is None:
             db_info['disk_size'] = self.params.get('root_disk_size_db')
         if db_info['n_local_ssd'] is None:
@@ -840,8 +840,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
         if monitor_info['type'] is None:
             monitor_info['type'] = self.params.get('gce_instance_type_monitor')
-        if monitor_info['disk_type'] is None:
-            monitor_info['disk_type'] = self.params.get('gce_root_disk_type_monitor')
+        if monitor_info['root_disk_type'] is None:
+            monitor_info['root_disk_type'] = self.params.get('gce_root_disk_type_monitor')
         if monitor_info['disk_size'] is None:
             monitor_info['disk_size'] = self.params.get('root_disk_size_monitor')
         if monitor_info['n_local_ssd'] is None:
@@ -875,6 +875,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                              params=self.params,
                              gce_datacenter=gce_datacenter,
                              )
+
+        # create provisioners
+        gce_provisioners = []
+        for region in gce_datacenter:
+            gce_provisioners.append(
+                provisioner_factory.create_provisioner(backend="gce",
+                                                       test_id=self.test_id,
+                                                       region=region,
+                                                       params=self.params)
+            )
+
         if db_type == 'cloud_scylla':
             cloud_credentials = self.params.get('cloud_credentials_path')
 
@@ -890,11 +901,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.db_cluster = cluster_cloud.ScyllaCloudCluster(**params)
         else:
             self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
-                                               gce_image_type=db_info['disk_type'],
+                                               gce_image_type=db_info['root_disk_type'],
                                                gce_image_size=db_info['disk_size'],
                                                gce_n_local_ssd=db_info['n_local_ssd'],
                                                gce_instance_type=db_info['type'],
                                                services=services,
+                                               provisioners=gce_provisioners,
                                                n_nodes=db_info['n_nodes'],
                                                add_disks=cluster_additional_disks,
                                                service_accounts=service_accounts,
@@ -902,11 +914,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader')}
         self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image_loader'),
-                                    gce_image_type=loader_info['disk_type'],
+                                    gce_image_type=loader_info['root_disk_type'],
                                     gce_image_size=loader_info['disk_size'],
                                     gce_n_local_ssd=loader_info['n_local_ssd'],
                                     gce_instance_type=loader_info['type'],
                                     service=services[:1],
+                                    provisioners=gce_provisioners,
                                     n_nodes=loader_info['n_nodes'],
                                     add_disks=loader_additional_disks,
                                     **common_params)
@@ -914,11 +927,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if monitor_info['n_nodes'] > 0:
             monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor')}
             self.monitors = MonitorSetGCE(gce_image=gce_image_monitor,
-                                          gce_image_type=monitor_info['disk_type'],
+                                          gce_image_type=monitor_info['root_disk_type'],
                                           gce_image_size=monitor_info['disk_size'],
                                           gce_n_local_ssd=monitor_info['n_local_ssd'],
                                           gce_instance_type=monitor_info['type'],
                                           service=services[:1],
+                                          provisioners=gce_provisioners,
                                           n_nodes=monitor_info['n_nodes'],
                                           add_disks=monitor_additional_disks,
                                           targets=dict(db_cluster=self.db_cluster,
@@ -1395,9 +1409,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         common_params = get_common_params(params=self.params, regions=regions, credentials=self.credentials,
                                           services=services)
 
-        monitor_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
+        monitor_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'root_disk_type': None, 'n_local_ssd': None,
                         'device_mappings': None}
-        db_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
+        db_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'root_disk_type': None, 'n_local_ssd': None,
                    'device_mappings': None}
 
         init_db_info_from_params(db_info, params=self.params, regions=regions)
@@ -1536,14 +1550,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                        monitor_info=None):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
         if loader_info is None:
-            loader_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
+            loader_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'root_disk_type': None, 'n_local_ssd': None,
                            'device_mappings': None}
         if db_info is None:
-            db_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
+            db_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'root_disk_type': None, 'n_local_ssd': None,
                        'device_mappings': None}
 
         if monitor_info is None:
-            monitor_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
+            monitor_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'root_disk_type': None, 'n_local_ssd': None,
                             'device_mappings': None}
 
         cluster_backend = self.params.get('cluster_backend')

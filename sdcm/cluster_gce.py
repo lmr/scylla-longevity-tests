@@ -10,30 +10,31 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
-import os
 import json
-import time
 import logging
-from typing import Dict, Any, ParamSpec, TypeVar
-from textwrap import dedent
-from functools import cached_property, cache
+import os
+import time
 from collections.abc import Callable
+from functools import cached_property, cache
+from typing import Dict, ParamSpec, TypeVar
 
 import tenacity
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError, InvalidRequestError
+from libcloud.compute.base import NodeDriver
 
 from sdcm import cluster
-from sdcm.provision.helpers.cloud_init import get_cloud_init_config
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.utils.gce_utils import GceLoggingClient
-from sdcm.wait import exponential_retry
+from sdcm.provision.helpers.cloud_init import get_cloud_init_config
 from sdcm.keystore import pub_key_from_private_key_file
+from sdcm.provision import GCEProvisioner
+from sdcm.provision.gce.data_disks import ScratchDisk, PersistentStandardDisk, GCE_DISK_TYPES
+from sdcm.provision.provisioner import InstanceDefinition, VmArch, DataDisk, PricingModel, VmInstance, ProvisionError
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
-
+from sdcm.wait import exponential_retry
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
 
@@ -55,14 +56,14 @@ class GCENode(cluster.BaseNode):
 
     log = LOGGER
 
-    def __init__(self, gce_instance, gce_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
+    def __init__(self, vm_instance: VmInstance, gce_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, gce_image_username='root',
                  base_logdir=None, dc_idx=0):
         name = f"{node_prefix}-{dc_idx}-{node_index}".lower()
         self.node_index = node_index
-        self._instance = gce_instance
+        self._instance = vm_instance
         self._gce_service = gce_service
-        self._gce_logging_client = GceLoggingClient(name, self._instance.extra["zone"].name)
+        self._gce_logging_client = GceLoggingClient(name, self._instance.node.extra["zone"].name)
         self._last_logs_fetch_time = 0.0
         ssh_login_info = {'hostname': None,
                           'user': gce_image_username,
@@ -94,7 +95,7 @@ class GCENode(cluster.BaseNode):
                 "NodeIndex": str(self.node_index), }
 
     def _set_keep_alive(self) -> bool:
-        return self._instance_wait_safe(self._gce_service.ex_set_node_labels, self._instance, {"keep": "alive"}) and \
+        return self._instance_wait_safe(self._instance.add_tags, {"keep": "alive"}) and \
             super()._set_keep_alive()
 
     def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
@@ -102,26 +103,26 @@ class GCENode(cluster.BaseNode):
             return exponential_retry(func=lambda: instance_method(*args, **kwargs), logger=self.log)
         except tenacity.RetryError:
             raise cluster.NodeError(
-                f"Timeout while running '{instance_method.__name__}' method on GCE instance '{self._instance.id}'"
+                f"Timeout while running '{instance_method.__name__}' method on GCE instance '{self._instance.name}'"
             ) from None
 
     def _refresh_instance_state(self):
         node_name = self._instance.name
-        instance = self._instance_wait_safe(self._gce_service.ex_get_node, node_name)
-        self._instance = instance
-        ip_tuple = (instance.public_ips, instance.private_ips)
-        return ip_tuple
+        node = self._instance_wait_safe(self._gce_service.ex_get_node, node_name)
+        self._instance.private_ip_address = node.private_ips
+        self._instance.public_ip_address = node.public_ips
+        return self._instance.public_ip_address, self._instance.private_ip_address
 
     @property
     def region(self):
-        return self._gce_service.region.name
+        return self._instance.region
 
     def set_hostname(self):
         self.log.debug("Hostname for node %s left as is", self.name)
 
     @property
     def is_spot(self):
-        return self._instance.extra['scheduling']['preemptible']
+        return self._instance.pricing_model == PricingModel.SPOT
 
     def check_spot_termination(self):
         """Check if a spot instance termination was initiated by the cloud.
@@ -159,33 +160,29 @@ class GCENode(cluster.BaseNode):
         self._instance_wait_safe(self._instance.reboot)
 
     def _safe_destroy(self):
-        try:
-            self._gce_service.ex_get_node(self.instance_name)
-            self._instance.destroy()
-        except ResourceNotFoundError:
-            self.log.exception("Instance doesn't exist, skip destroy")
+        self._instance.terminate()
 
     def destroy(self):
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
-        self._instance_wait_safe(self._safe_destroy)
+        self._instance_wait_safe(self._safe_destroy())
         super().destroy()
 
     def get_console_output(self):
         # TODO adding console output from instance on GCE
         self.log.warning('Method is not implemented for GCENode')
-        return ''
+        return NotImplemented
 
     def get_console_screenshot(self):
         # TODO adding console output from instance on GCE
         self.log.warning('Method is not implemented for GCENode')
-        return b''
+        return NotImplemented
 
     @cache
     def _get_ipv6_ip_address(self):
         self.log.warning('On GCE, VPC networks only support IPv4 unicast traffic. '
                          'They do not support IPv6 traffic within the network.')
-        return ""
+        return NotImplemented
 
     @property
     def image(self):
@@ -198,9 +195,10 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     Cluster of Node objects, started on GCE (Google Compute Engine).
     """
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
-                 cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=None,
-                 gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
+    # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services: list[NodeDriver],
+                 credentials, provisioners: list[GCEProvisioner], cluster_uuid=None, gce_instance_type='n1-standard-1',
+                 gce_region_names=None, gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None,
                  service_accounts=None, add_nodes=True):
 
@@ -219,6 +217,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self._service_accounts = service_accounts
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix
+        self.provisioners: list[GCEProvisioner] = provisioners
         super().__init__(cluster_uuid=cluster_uuid,
                          cluster_prefix=cluster_prefix,
                          node_prefix=node_prefix,
@@ -243,58 +242,16 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         identifier += 'Type: %s' % self._gce_instance_type
         return identifier
 
-    def _get_disk_url(self, disk_type='pd-standard', dc_idx=0):
-        project = self._gce_services[dc_idx].ex_get_project()
-        return "projects/%s/zones/%s/diskTypes/%s" % (project.name, self._gce_region_names[dc_idx], disk_type)
-
-    def _get_root_disk_struct(self, name, disk_type='pd-standard', dc_idx=0):
-        device_name = '%s-root-%s' % (name, disk_type)
-        return {"type": "PERSISTENT",
-                "deviceName": device_name,
-                "initializeParams": {
-                    # diskName parameter has a limit of 62 chars, comment it to use system allocated name
-                    # "diskName": device_name,
-                    "diskType": self._get_disk_url(disk_type, dc_idx=dc_idx),
-                    "diskSizeGb": self._gce_image_size,
-                    "sourceImage": self._gce_image
-                },
-                "boot": True,
-                "autoDelete": True}
-
-    def _get_local_ssd_disk_struct(self, name, index, interface='NVME', dc_idx=0):
-        device_name = '%s-data-local-ssd-%s' % (name, index)
-        return {"type": "SCRATCH",
-                "deviceName": device_name,
-                "initializeParams": {
-                    "diskType": self._get_disk_url('local-ssd', dc_idx=dc_idx),
-                },
-                "interface": interface,
-                "autoDelete": True}
-
-    def _get_persistent_disk_struct(self, name, disk_size, disk_type='pd-ssd', dc_idx=0):
-        device_name = '%s-data-%s' % (name, disk_type)
-        return {"type": "PERSISTENT",
-                "deviceName": device_name,
-                "initializeParams": {
-                    "diskType": self._get_disk_url(disk_type, dc_idx=dc_idx),
-                    "diskSizeGb": disk_size,
-                },
-                "autoDelete": True}
-
-    def _get_disks_struct(self, name, dc_idx):
-        gce_disk_struct = [self._get_root_disk_struct(name=name,
-                                                      disk_type=self._gce_image_type,
-                                                      dc_idx=dc_idx)]
-        for i in range(self._gce_n_local_ssd):
-            gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
-        if self._add_disks:
-            for disk_type, disk_size in self._add_disks.items():
-                disk_size = int(disk_size)
-                if disk_size:
-                    gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
-                                                                            disk_type=disk_type, dc_idx=dc_idx))
-        self.log.debug(gce_disk_struct)
-        return gce_disk_struct
+    def _get_provisioner_for_dc(self, dc_idx: int) -> GCEProvisioner:
+        gce_service = self._gce_services[dc_idx]
+        found_provisioners = [item for item in self.provisioners if gce_service.region.name in item.region]
+        if len(found_provisioners) == 1:
+            provisioner = found_provisioners[0]
+            return provisioner
+        else:
+            raise ProvisionError(f"Did not find a provisioner for the given region:"
+                                 f"\ngce service region name: {gce_service.region.name}\n"
+                                 f"provisioners list: {[self.provisioners]}")
 
     def _prepare_user_data(self):
         if not self.params.get("use_preinstalled_scylla"):
@@ -304,13 +261,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                    start_scylla_on_first_boot=False,
                                    raid_level=self.params.get("raid_level")))
 
-    def _create_instance(self, node_index, dc_idx, spot=False):
-        def set_tags_as_labels(_instance):
-            self.log.debug(f"Expected tags are {self.tags}")
-            lower_tags = dict((k.lower(), v.lower().replace('.', '-')) for k, v in self.tags.items())
-            self.log.debug(f"Lower tags are {lower_tags}")
-            self._gce_services[dc_idx].ex_set_node_labels(_instance, lower_tags)
-
+    def _create_instance(self, node_index, dc_idx, pricing_model: PricingModel) -> VmInstance:
         # if size of disk is larget than 80G, then
         # change the timeout of job completion to default * 3.
 
@@ -320,44 +271,29 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             self._gce_services[dc_idx].connection.timeout = gce_job_default_timeout * 3
             self.log.info("Job complete timeout is set to %ss" %
                           self._gce_services[dc_idx].connection.timeout)
-        name = f"{self.node_prefix}-{dc_idx}-{node_index}".lower()
-        gce_disk_struct = self._get_disks_struct(name=name, dc_idx=dc_idx)
-        # Name must start with a lowercase letter followed by up to 63
-        # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
-        assert len(name) <= 63, "Max length of instance name is 63"
-        startup_script = self.test_config.get_startup_script()
 
-        if self.params.get("scylla_linux_distro") in ("ubuntu-bionic", "ubuntu-xenial", "ubuntu-focal",):
-            # we need to disable sshguard to prevent blocking connections from the builder
-            startup_script += dedent("""
-                sudo systemctl disable sshguard
-                sudo systemctl stop sshguard
-            """)
-        username = self.params.get("gce_image_username")
-        public_key = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
-        create_node_params = dict(name=name,
-                                  size=self._gce_instance_type,
-                                  image=self._gce_image,
-                                  ex_network=self._gce_network,
-                                  ex_disks_gce_struct=gce_disk_struct,
-                                  ex_metadata={**self.tags,
-                                               "Name": name,
-                                               "NodeIndex": node_index,
-                                               "startup-script": startup_script,
-                                               "user-data": self._prepare_user_data(),
-                                               "block-project-ssh-keys": "true",
-                                               "ssh-keys": f"{username}:ssh-rsa {public_key}", },
-                                  ex_service_accounts=self._service_accounts,
-                                  ex_preemptible=spot)
+        data_disks = []
 
-        instance = self._create_node_with_retries(name=name,
-                                                  dc_idx=dc_idx,
-                                                  create_node_params=create_node_params,
-                                                  spot=spot)
+        for _ in range(self._gce_n_local_ssd):
+            data_disks.append(ScratchDisk(type=GCE_DISK_TYPES.SCRATCH))
 
-        self.log.info('Created %s instance %s', 'spot' if spot else 'on-demand', instance)
+        for add_disk_type, add_disk_size in self._add_disks.items():
+            if add_disk_size > 0:
+                data_disks.append(PersistentStandardDisk(type=add_disk_type, size=add_disk_size))
+            else:
+                self.log.debug("Got additional disk with disk_size <= 0. Skipping adding the disk.")
+
+        instance_definition = self.create_instance_definition(data_disks, dc_idx, node_index)
+
+        pricing_model = PricingModel.SPOT
+
+        instance = self._create_node_with_retries(dc_idx=dc_idx,
+                                                  instance_definition=instance_definition,
+                                                  pricing_model=pricing_model)
+
+        self.log.info('Created %s instance %s', pricing_model.value, instance)
         try:
-            set_tags_as_labels(instance)
+            instance.add_tags(instance_definition.tags)
         except InvalidRequestError as exc:
             self.log.warning(f"Unable to set tags as labels due to {exc}")
 
@@ -366,56 +302,89 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             self._gce_services[dc_idx].connection.timeout = gce_job_default_timeout
         return instance
 
+    def create_instance_definition(self, data_disks: list[DataDisk], dc_idx, node_index):
+        instance_definition = InstanceDefinition(
+            instance_index=node_index,
+            name=f"{self.node_prefix}-{dc_idx}-{node_index}".lower(),
+            image_id=self._gce_image,
+            type=self._gce_instance_type,
+            user_name=self.params.get("gce_image_username"),
+            # TODO: can we switch to SSHKey wrapped in NodeAuthSSHKey
+            ssh_key=pub_key_from_private_key_file(self.params.get("user_credentials_path")),
+            tags=dict((k.lower(), v.lower().replace('.', '-')) for k, v in self.tags.items()),
+            arch=VmArch.X86,  # TODO: need to switch between architectures here
+            root_disk_size=self._gce_image_size,
+            data_disks=data_disks,
+            user_data=self._prepare_user_data(),  # TODO: add user data object list for GCE
+            startup_script=self.test_config.get_startup_script()
+        )
+
+        LOGGER.info("Created instance definition:\n%s", instance_definition)
+        return instance_definition
+
     @retrying(n=3,
               sleep_time=900,
               allowed_exceptions=(GoogleBaseError, ResourceNotFoundError),
               message="Retrying to create a GCE node...",
               raise_on_exceeded=True)
     def _create_node_with_retries(self,
-                                  name: str,
                                   dc_idx: int,
-                                  create_node_params: dict[str, Any],
-                                  spot: bool = False) -> GCENode:
+                                  instance_definition: InstanceDefinition,
+                                  pricing_model: PricingModel) -> VmInstance:
+        provisioner = self._get_provisioner_for_dc(dc_idx=dc_idx)
+
         try:
-            return self._gce_services[dc_idx].create_node(**create_node_params)
+            instance = None
+            instance = provisioner.get_or_create_instance(
+                definition=instance_definition,
+                pricing_model=pricing_model
+            )
+            return instance
         except GoogleBaseError as gbe:
-            if not spot:
+            if not pricing_model == pricing_model.SPOT:
                 raise
 
             #  attempt to destroy if node did not start due to preemption
             if "Instance failed to start due to preemption" in str(gbe):
                 try:
-                    self._destroy_instance(name=name, dc_idx=dc_idx)
+                    provisioner.terminate_instance(name=instance_definition.name)
                 except ResourceNotFoundError:
-                    LOGGER.warning("Attempted to destroy node: {name: %s, idx:%s}, but could not find it. "
-                                   "Possibly the node was destroyed already.", name, dc_idx)
+                    LOGGER.warning("Attempted to destroy node: {name: %s}, but could not find it in region %s. "
+                                   "Possibly the node was destroyed already.",
+                                   instance_definition.name, provisioner.region)
 
-            create_node_params['ex_preemptible'] = spot = False
+            # retry with ON_DEMAND if SPOT failed
+            pricing_model = PricingModel.ON_DEMAND
 
             raise gbe
 
-    def _create_instances(self, count, dc_idx=0):
-        spot = 'spot' in self.instance_provision
+    def _create_instances(self, count, dc_idx=0) -> list[VmInstance]:
+        pricing_model = PricingModel.SPOT if self.instance_provision == PricingModel.SPOT \
+            else PricingModel.ON_DEMAND  # TODO: generalize for all pricing models
         instances = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            instances.append(self._create_instance(node_index, dc_idx, spot))
+            instances.append(self._create_instance(node_index=node_index, dc_idx=dc_idx, pricing_model=pricing_model))
         return instances
 
     def _destroy_instance(self, name: str, dc_idx: int) -> bool:
-        target_node = self._get_instances_by_name(dc_idx=dc_idx, name=name)
+        provisioner = self._get_provisioner_for_dc(dc_idx)
+        return provisioner.terminate_instance(name=name)
 
-        return self._gce_services[dc_idx].destroy_node(node=target_node, destroy_boot_disk=True)
+    def _get_instances_by_prefix(self, dc_idx: int = 0) -> list[VmInstance]:
+        provisioner = self._get_provisioner_for_dc(dc_idx)
+        instances_list = provisioner.list_instances()
+        # instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
+        return instances_list
 
-    def _get_instances_by_prefix(self, dc_idx: int = 0):
-        instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
-        return [node for node in instances_by_zone if node.name.startswith(self._node_prefix)]
-
-    def _get_instances_by_name(self, name: str, dc_idx: int = 0):
-        instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
-        found = [node for node in instances_by_zone if node.name == name]
+    def _get_instances_by_name(self, name: str, dc_idx: int = 0) -> VmInstance:
+        # instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
+        provisioner = self._get_provisioner_for_dc(dc_idx)
+        instances_list = provisioner.list_instances()
+        found = [instance for instance in instances_list if instance.name == name]
         return found[0] if found else None
 
     def _get_instances(self, dc_idx):
+        # TODO: rework to be VmInstance-compatible
         test_id = self.test_config.test_id()
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
@@ -438,9 +407,9 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         instances = sorted(instances, key=sort_by_index)
         return instances
 
-    def _create_node(self, instance, node_index, dc_idx):
+    def _create_node(self, instance: VmInstance, node_index, dc_idx):
         try:
-            node = GCENode(gce_instance=instance,
+            node = GCENode(vm_instance=instance,
                            gce_service=self._gce_services[dc_idx],
                            credentials=self._credentials[0],
                            parent_cluster=self,
@@ -469,7 +438,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
         self.log.debug('instances: %s', instances)
         if instances:
-            self.log.debug('GCE instance extra info: %s', instances[0].extra)
+            self.log.debug('GCE instance extra info: %s', instances[0].node.extra)
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
             node = self._create_node(instance, node_index, dc_idx)
             nodes.append(node)
@@ -485,7 +454,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
-                 gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
+                 provisioners: list[GCEProvisioner], gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=3, add_disks=None, params=None, gce_datacenter=None, service_accounts=None):
         # pylint: disable=too-many-locals
@@ -501,6 +470,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
             gce_instance_type=gce_instance_type,
             gce_image_username=gce_image_username,
             services=services,
+            provisioners=provisioners,
             credentials=credentials,
             cluster_prefix=cluster_prefix,
             node_prefix=node_prefix,
@@ -521,7 +491,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,  # pylint: disable=too-many-arguments
-                 gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
+                 provisioners: list[GCEProvisioner], gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None, gce_datacenter=None):
         # pylint: disable=too-many-locals
@@ -538,6 +508,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
                             gce_instance_type=gce_instance_type,
                             gce_image_username=gce_image_username,
                             services=service,
+                            provisioners=provisioners,
                             credentials=credentials,
                             cluster_prefix=cluster_prefix,
                             node_prefix=node_prefix,
@@ -552,7 +523,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
 
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,  # pylint: disable=too-many-arguments
-                 gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
+                 provisioners: list[GCEProvisioner], gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', user_prefix=None, n_nodes=1,
                  targets=None, add_disks=None, params=None, gce_datacenter=None,
                  add_nodes=True, monitor_id=None):
@@ -573,6 +544,7 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
                             gce_instance_type=gce_instance_type,
                             gce_image_username=gce_image_username,
                             services=service,
+                            provisioners=provisioners,
                             credentials=credentials,
                             cluster_prefix=cluster_prefix,
                             node_prefix=node_prefix,
