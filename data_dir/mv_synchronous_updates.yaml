@@ -1,0 +1,84 @@
+# LWT test: create and update data using LWT.
+### DML ###
+
+# Keyspace Name
+keyspace: mv_synchronous_ks
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS mv_synchronous_ks WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+# Table name
+table: mv_synchronous_cf
+
+# The CQL for creating a table you wish to stress (optional if it already exists)
+table_definition: |
+  CREATE TABLE IF NOT EXISTS mv_synchronous_cf (
+        domain int,
+        published_date int,
+        mv_pk int,
+        url text,
+        author text,
+        title text,
+        PRIMARY KEY(domain)
+  ) WITH comment='A table to hold blog posts'
+
+extra_definitions:
+  - create MATERIALIZED VIEW cf_update_2_columns_mv_pk as select mv_pk, author from mv_synchronous_cf where domain is not null and mv_pk > 1000000 and mv_pk <= 1150000 PRIMARY KEY(mv_pk, domain) WITH synchronous_updates = true;
+  - create MATERIALIZED VIEW cf_update_mv_pk as select * from mv_synchronous_cf where domain is not null and mv_pk > 1150000 and mv_pk < 300000000 PRIMARY KEY(mv_pk, domain) WITH synchronous_updates = true;
+  - create MATERIALIZED VIEW cf_update_asynch_test as select published_date, author from mv_synchronous_cf where domain is not null and published_date >= 10000000 and published_date < 19000000 PRIMARY KEY(published_date, domain);
+  - create MATERIALIZED VIEW cf_update_synch_test as select * from mv_synchronous_cf where domain is not null and published_date > 1000000 and published_date < 10000000 PRIMARY KEY(published_date, domain) WITH synchronous_updates = true;
+
+### Column Distribution Specifications ###
+
+columnspec:
+  - name: domain
+    population: seq(1..200000001)  #10M possible domains to pick from
+
+  - name: published_date
+    cluster: uniform(1..2000000)         #under each domain we will have max 1000 posts
+
+  - name: mv_pk
+    population: seq(1..2001000)
+
+  - name: url
+    size: uniform(30..30)
+
+  - name: title                  #titles shouldn't go beyond 200 chars
+    size: gaussian(10..20)
+
+  - name: author
+    size: uniform(5..20)         #author names should be short
+
+### Batch Ratio Distribution Specifications ###
+
+insert:
+  partitions: fixed(1)            # Our partition key is the domain so only insert one per batch
+
+  select:    fixed(1)/1000        # We have 1000 posts per domain so 1/1000 will allow 1 post per batch
+
+  batchtype: UNLOGGED             # Unlogged batches
+
+
+#
+# A list of queries you wish to run against the schema
+#
+queries:
+   select_base:
+      cql: select * from mv_synchronous_cf where domain = ? LIMIT 1
+      fields: samerow
+   select_mv:
+      cql: select * from cf_update_2_columns_mv_pk where domain = ? and mv_pk = ? LIMIT 1
+      fields: samerow
+   select_mv_2:
+      cql: select * from cf_update_mv_pk where domain = ? and mv_pk = ? LIMIT 1
+      fields: samerow
+   mv_pk_update_two_columns:
+      cql: update mv_synchronous_cf set mv_pk = ?, author = 'text' where domain = ?
+      fields: samerow
+   mv_pk_update_all_non_pk:
+      cql: update mv_synchronous_cf set author = ?, published_date = ?, url = ?, title = ?  where domain = ?
+      fields: samerow
+   mv_deletes:
+     cql: delete from mv_synchronous_cf where domain = ?
+     fields: samerow

@@ -119,6 +119,20 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
     assert _remote_get_hash(remoter, dst) == hash_expected
 
 
+def get_stress_command_for_profile(params, stress_cmds_part, search_for_user_profile, stress_cmd=None):
+    if not stress_cmd:
+        stress_cmd = params.get(stress_cmds_part) or []
+        stress_cmd = [cmd for cmd in stress_cmd if search_for_user_profile in cmd]
+
+    if not stress_cmd:
+        return []
+
+    if not isinstance(stress_cmd, list):
+        stress_cmd = [stress_cmd]
+
+    return stress_cmd
+
+
 def get_profile_content(stress_cmd):
     """
     Looking profile yaml in data_dir or the path as is to get the user profile
@@ -137,6 +151,40 @@ def get_profile_content(stress_cmd):
     with open(cs_profile, encoding="utf-8") as yaml_stream:
         profile = yaml.safe_load(yaml_stream)
     return cs_profile, profile
+
+
+def get_view_cmd_from_profile(profile_content, name_substr, all_entries=False):
+    all_mvs = profile_content['extra_definitions']
+    mv_cmd = [cmd for cmd in all_mvs if name_substr in cmd]
+
+    mv_cmd = [mv_cmd[0]] if not all_entries and mv_cmd else mv_cmd
+    return mv_cmd
+
+
+def get_view_name_from_stress_cmd(mv_create_cmd, name_substr):
+    find_mv_name = re.search(r'materialized view (.*%s.*) as' % name_substr, mv_create_cmd, re.I)
+    return find_mv_name.group(1) if find_mv_name else None
+
+
+def get_view_name_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str, view_name_substr: str):
+    stress_cmd = get_stress_command_for_profile(params=params, stress_cmds_part=stress_cmds_part,
+                                                search_for_user_profile=search_for_user_profile)
+    if not stress_cmd:
+        return ""
+
+    _, profile = get_profile_content(stress_cmd[0])
+    mv_cmd = get_view_cmd_from_profile(profile, view_name_substr)
+    return get_view_name_from_stress_cmd(mv_cmd[0], view_name_substr)
+
+
+def get_keyspace_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str):
+    stress_cmd = get_stress_command_for_profile(params=params, stress_cmds_part=stress_cmds_part,
+                                                search_for_user_profile=search_for_user_profile)
+    if not stress_cmd:
+        return ""
+
+    _, profile = get_profile_content(stress_cmd[0])
+    return profile['keyspace']
 
 
 def generate_random_string(length):
@@ -2808,3 +2856,47 @@ class RemoteTemporaryFolder:
     def __exit__(self, exit_type, value, _traceback):
         # remove the temporary folder as `sudo` to cover the case when the folder owner was changed during test
         self.node.remoter.sudo(f'rm -rf {self.folder_name}')
+
+
+def get_keyspace_partition_ranges(node, keyspace: str):
+    result = node.run_nodetool("describering", keyspace)
+    if not result.stdout:
+        return None
+
+    ranges_as_list = re.findall(r'^\s*TokenRange\((.*)\)\s*$', result.stdout, re.MULTILINE)
+    if not ranges_as_list:
+        raise ValueError(f"No TokenRange() found in describering: {result.stdout}")
+
+    return [describering_parsing(one_range) for one_range in ranges_as_list]
+
+
+def keyspace_min_max_tokens(node, keyspace: str):
+    ranges = get_keyspace_partition_ranges(node, keyspace)
+    if not ranges:
+        return None, None
+
+    min_token = min([token['start_token'] for token in ranges])
+    max_token = max([token['end_token'] for token in ranges])
+    return min_token, max_token
+
+
+def describering_parsing(describering_output):
+    def _list2dic(attr_list, heads_to_dict):
+        res = {}
+        for ind, attr in enumerate(heads_to_dict):
+            res[attr] = attr_list[ind].strip()
+        return res
+
+    found_attributes = re.findall(r'^\s*start_token:(-?\d+), end_token:(-?\d+), endpoints:\[([\d\., ]+)\], '
+                                  r'rpc_endpoints:\[([\d\., ]+)\], endpoint_details:\[(.*)\]\s*$',
+                                  describering_output, re.MULTILINE)
+    heads = ['start_token', 'end_token', 'endpoints', 'rpc_endpoints']
+    result = {}
+    assert found_attributes, "Wrong format of token range: " + describering_output
+    for index, attribute in enumerate(heads):
+        attr_value = found_attributes[0][index].strip()
+        result[attribute] = int(attr_value) if "token" in attribute else attr_value
+        result["details"] = [_list2dic(attr_list, ['host', 'datacenter', 'rack']) for attr_list in
+                             re.findall(r'EndpointDetails\(host:([\d\.,]+), datacenter:([^,]+), rack:([^\)]+)\),?',
+                                        found_attributes[0][4])]
+    return result

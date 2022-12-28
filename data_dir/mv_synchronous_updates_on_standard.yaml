@@ -1,0 +1,22 @@
+# LWT test: create and update data using LWT.
+### DML ###
+
+# Keyspace Name
+keyspace: keyspace1
+
+# Table name
+table: standard1
+
+#
+# A list of queries you wish to run against the schema
+#
+queries:
+   select:
+      cql: select * from main_mv_standard1 where key = ? LIMIT 1
+      fields: samerow
+   mv_pk_update_pk:
+      cql: update standard1 set "C0" = ? where key = ?
+      fields: samerow
+   mv_pk_update_non_pk:
+      cql: update standard1 set "C1" = ? where key = ?
+      fields: samerow

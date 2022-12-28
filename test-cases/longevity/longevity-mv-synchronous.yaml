@@ -1,0 +1,30 @@
+test_duration: 1500
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=200200300  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(5)' -pop seq=1..200200300 -log interval=15",
+                    "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml ops'(insert=25)' cl=QUORUM n=100000000 -mode cql3 native -rate threads=100",
+                    "cassandra-stress user profile=/tmp/mv_synchronous_updates_lwt.yaml ops'(insert=25)' cl=QUORUM n=10000000 -mode cql3 native -rate threads=100"
+                   ]
+stress_read_cmd: ["cassandra-stress mixed cl=QUORUM duration=1200m  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..200200300 -log interval=15",
+                  "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml ops'(select_base=3,select_mv=3,select_mv_2=3,mv_pk_update_two_columns=1)' cl=QUORUM duration=1200m -mode cql3 native -rate threads=50",
+                  "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml ops'(select_base=3,select_mv=3,select_mv_2=3,mv_deletes=1)' cl=QUORUM duration=1200m -mode cql3 native -rate threads=50",
+                  "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml ops'(select_base=3,select_mv=3,select_mv_2=3,mv_pk_update_all_non_pk=1)' cl=QUORUM duration=1200m -mode cql3 native -rate threads=50",
+                  "cassandra-stress user profile=/tmp/mv_synchronous_updates_lwt.yaml ops'(lwt_deletes=10)' cl=SERIAL duration=1200m -mode cql3 native -rate threads=50",
+                  "cassandra-stress user profile=/tmp/mv_synchronous_updates_lwt.yaml ops'(lwt_update_one_column=10)' cl=SERIAL duration=1200m -mode cql3 native -rate threads=50",
+                  "cassandra-stress user profile=/tmp/mv_synchronous_updates_on_standard.yaml ops'(select=6, mv_pk_update_pk=2, mv_pk_update_non_pk=2)' cl=QUORUM  duration=1200m -pop seq=0..200200300 -mode cql3 native -rate threads=50",
+                  "cassandra-stress user profile=/tmp/mv_synchronous_updates_on_standard.yaml ops'(select=6, mv_pk_update_pk=2, mv_pk_update_non_pk=2)' cl=QUORUM  duration=1200m -pop seq=0..200200300 -mode cql3 native -rate threads=50",
+                 ]
+run_fullscan: '{"ks_cf": "random", "interval": 15}' # 'ks.cf|random, interval(min)'
+
+n_db_nodes: 5
+n_loaders: 2
+n_monitor_nodes: 1
+round_robin: true
+
+instance_type_db: 'i3.4xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '023'
+nemesis_interval: 5
+
+user_prefix: 'longevity-mv-synch'
+
+space_node_threshold: 644245

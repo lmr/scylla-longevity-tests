@@ -85,7 +85,7 @@ from sdcm.utils.common import (
     normalize_ipv6_url,
     download_dir_from_cloud,
     generate_random_string,
-    prepare_and_start_saslauthd_service,
+    prepare_and_start_saslauthd_service
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro

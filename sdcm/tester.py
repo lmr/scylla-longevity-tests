@@ -2245,7 +2245,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug('MV create statement: {}'.format(query))
         session.execute(query)
 
-    def _wait_for_view(self, scylla_cluster, session, key_space, view):
+    def _wait_for_view(self, scylla_cluster, session, key_space, view, wait_attempts=20):
         self.log.debug("Waiting for view {}.{} to finish building...".format(key_space, view))
 
         def _view_build_finished(live_nodes_amount):
@@ -2255,11 +2255,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.debug('View build status result: {}'.format(result))
             return len([status for status in result if status[0] == 'SUCCESS']) >= live_nodes_amount
 
-        attempts = 20
+        attempts = wait_attempts
         nodes_status = scylla_cluster.get_nodetool_status()
         live_nodes_amount = 0
-        for dc in nodes_status.itervalues():
-            for ip in dc.itervalues():
+        for dc in nodes_status.values():
+            for ip in dc.values():
                 if ip['state'] == 'UN':
                     live_nodes_amount += 1
 

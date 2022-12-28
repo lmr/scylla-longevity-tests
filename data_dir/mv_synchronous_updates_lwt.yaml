@@ -1,0 +1,82 @@
+# LWT test: create and update data using LWT.
+### DML ###
+
+# Keyspace Name
+keyspace: mv_synchronous_lwt_ks
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS mv_synchronous_lwt_ks WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+# Table name
+table: mv_synchronous_lwt_cf
+
+# The CQL for creating a table you wish to stress (optional if it already exists)
+table_definition: |
+  CREATE TABLE IF NOT EXISTS mv_synchronous_lwt_cf (
+        domain int,
+        published_date int,
+        mv_pk int,
+        url text,
+        author text,
+        title text,
+        PRIMARY KEY(domain, mv_pk)
+  ) WITH comment='A table to hold data for MV synchronous updates test'
+
+extra_definitions:
+  - create MATERIALIZED VIEW mv_synchronous_lwt_publish_date as select published_date, author from mv_synchronous_lwt_cf where domain is not null and mv_pk is not null and published_date > 0 and published_date > 150000 PRIMARY KEY(published_date, domain, mv_pk) WITH synchronous_updates = true;
+  - create MATERIALIZED VIEW mv_synchronous_lwt_publish_date_after_update as select published_date, author from mv_synchronous_lwt_cf where domain is not null and mv_pk is not null and published_date = 300000000 PRIMARY KEY(published_date, domain, mv_pk) WITH synchronous_updates = true;
+  - create MATERIALIZED VIEW mv_synchronous_lwt_manual_test as select * from mv_synchronous_lwt_cf where domain is not null and mv_pk is not null and published_date > 1000000 and published_date < 5000000 PRIMARY KEY(published_date, domain, mv_pk);
+  - create MATERIALIZED VIEW mv_synchronous_lwt_deletions as select * from mv_synchronous_lwt_cf where domain is not null and mv_pk is not null and published_date > 150000 and published_date < 240000 PRIMARY KEY(published_date, domain, mv_pk);
+
+
+### Column Distribution Specifications ###
+
+columnspec:
+  - name: domain
+    population: seq(1..200000001)  #10M possible domains to pick from
+
+  - name: published_date
+    cluster: uniform(1..2000000)         #under each domain we will have max 1000 posts
+
+  - name: mv_pk
+    population: seq(1..2001000)
+
+  - name: url
+    size: uniform(30..30)
+
+  - name: title                  #titles shouldn't go beyond 200 chars
+    size: gaussian(10..20)
+
+  - name: author
+    size: uniform(5..20)         #author names should be short
+
+### Batch Ratio Distribution Specifications ###
+
+insert:
+  partitions: fixed(1)            # Our partition key is the domain so only insert one per batch
+
+  select:    fixed(1)/1000        # We have 1000 posts per domain so 1/1000 will allow 1 post per batch
+
+  batchtype: UNLOGGED             # Unlogged batches
+
+
+#
+# A list of queries you wish to run against the schema
+#
+queries:
+   select_base:
+      cql: select * from mv_synchronous_lwt_cf where domain = ? and mv_pk = ? LIMIT 1
+      fields: samerow
+   select_mv:
+      cql: select * from mv_synchronous_lwt_publish_date where domain = ? and published_date = ? and mv_pk = ? LIMIT 1
+      fields: samerow
+   select_mv_2:
+      cql: select * from mv_synchronous_lwt_publish_date_after_update where domain = ? and published_date = ? and mv_pk = ? LIMIT 1
+      fields: samerow
+   lwt_update_one_column:
+      cql: update mv_synchronous_lwt_cf set published_date = 30000000 where domain = ? and mv_pk = ? if published_date > 0 and published_date <= 150000
+      fields: samerow
+   lwt_deletes:
+     cql: delete from mv_synchronous_lwt_cf where domain = ? and mv_pk = ? if published_date > 150000 and published_date < 240000
+     fields: samerow
