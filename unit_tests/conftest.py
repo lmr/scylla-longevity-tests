@@ -142,3 +142,12 @@ def fixture_params(request: pytest.FixtureRequest):
 @pytest.fixture(scope='function', autouse=True)
 def fixture_cleanup_continuous_events_registry():
     ContinuousEventsRegistry().cleanup_registry()
+
+
+def pytest_addoption(parser):
+    parser.addoption("--generate-nemesis-file", action="store_true", default="default name")
+
+
+@pytest.fixture(scope='session')
+def generate_nemesis_file(request: pytest.FixtureRequest) -> bool:
+    return request.config.option.generate_nemesis_file

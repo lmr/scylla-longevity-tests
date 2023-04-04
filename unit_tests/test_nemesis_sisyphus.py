@@ -61,7 +61,7 @@ class FakeNemesis(Nemesis):
         pass
 
 
-def test_list_all_available_nemesis(generate_file=True):
+def test_list_all_available_nemesis(generate_nemesis_file):
     tester = FakeTester()
 
     tester.params["nemesis_seed"] = '1'
@@ -73,7 +73,7 @@ def test_list_all_available_nemesis(generate_file=True):
 
     assert len(disruption_list) == 76
 
-    if generate_file:
+    if generate_nemesis_file:
         with open('data_dir/nemesis.yml', 'w', encoding="utf-8") as outfile1:
             yaml.dump(disruptions_dict, outfile1, default_flow_style=False)
 

@@ -15,6 +15,7 @@ import time
 import shutil
 import tempfile
 import unittest.mock
+import multiprocessing as mp
 from contextlib import contextmanager
 
 from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, start_events_device, stop_events_device
@@ -33,6 +34,7 @@ class EventsUtilsMixin:
     def setup_events_processes(cls, events_device: bool, events_main_device: bool, registry_patcher: bool):
         """TestConfig own copy of Events Device machinery."""
 
+        mp.set_start_method('fork')
         cls.temp_dir = tempfile.mkdtemp()
         cls.events_processes_registry = EventsProcessesRegistry(log_dir=cls.temp_dir)
         if registry_patcher:

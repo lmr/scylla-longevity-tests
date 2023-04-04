@@ -25,6 +25,7 @@ import subprocess
 import traceback
 import uuid
 import pprint
+import platform
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial
@@ -178,7 +179,8 @@ class SctLoader(unittest.TestLoader):
               help="Install paths for extra python packages to install, scylla-cluster-plugins for example")
 def cli():
     LOGGER.info("install-bash-completion current path: %s", os.getcwd())
-    docker_hub_login(remoter=LOCALRUNNER)
+    if 'macOS' not in platform.platform():
+        docker_hub_login(remoter=LOCALRUNNER)
 
 
 @cli.command('provision-resources', help="Provision resources for the test")
@@ -1097,6 +1099,12 @@ def run_test(argv, backend, config, logdir):
 
     unittest.main(module=None, argv=['python -m unittest', argv],
                   failfast=False, buffer=False, catchbreak=True, testLoader=SctLoader())
+
+
+@cli.command('export-nemesis', help="Run SCT test using unittest")
+def export_nemesis():
+    sys.exit(pytest.main(['-s', '-v', '-p', 'no:warnings',
+             'unit_tests/test_nemesis_sisyphus.py::test_list_all_available_nemesis', '--generate-nemesis-file']))
 
 
 @cli.command('run-pytest', help="Run tests using pytest")
