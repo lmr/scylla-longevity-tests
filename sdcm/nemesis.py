@@ -4226,6 +4226,30 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.format_error_for_sla_test_and_raise(error_events=error_events)
 
+    def disrupt_sla_chaos(self):
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        if not self.cluster.params.get('sla'):
+            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        if not self.cluster.params.get('authenticator'):
+            raise UnsupportedNemesis("SLA feature can't work without authenticator")
+
+        if not (stress_cmds := self.get_cassandra_stress_write_cmds()):
+            raise UnsupportedNemesis("SLA nemesis needs cassandra-stress default table 'keyspace1.standard1' is created"
+                                     " and prefilled")
+
+        # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
+        # inserted in any case
+        column_definition, dataset_size = self.get_cassandra_stress_definition(stress_cmds)
+        self.log.debug("Dataset size for nemesis: %s", dataset_size)
+
+        sla_tests = SlaTests()
+        sla_tests.test_sla_chaos(tester=self.tester, num_of_partitions=dataset_size,
+                                 cassandra_stress_column_definition=column_definition)
+
     @staticmethod
     def format_error_for_sla_test_and_raise(error_events):
         if any(error_events):
@@ -5684,6 +5708,14 @@ class SlaMaximumAllowedSlsWithMaxSharesDuringLoad(Nemesis):
 
     def disrupt(self):
         self.disrupt_maximum_allowed_sls_with_max_shares_during_load()
+
+
+class SlaChaos(Nemesis):
+    disruptive = False
+    sla = True
+
+    def disrupt(self):
+        self.disrupt_sla_chaos()
 
 
 class SlaNemeses(Nemesis):

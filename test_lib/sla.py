@@ -361,6 +361,26 @@ class Role(UserRoleBase):
         LOGGER.debug('Role %s has been created', self.name)
         return self
 
+    def list_roles_granted_me(self, recursive=True):
+        query = f'LIST ROLES OF {self.name}{" NORECURSIVE" if not recursive else ""}'
+        if self.verbose:
+            LOGGER.debug('List granted roles query: %s', query)
+        result = self.session.execute(query).all()
+        LOGGER.info("list_roles_granted_me: %s", result)
+
+        if len(result) == 0:
+            return None
+
+        granted_roles = []
+        for row in result:
+            if row.role == self.name:
+                continue
+
+            granted_roles.append(row.role)
+
+        LOGGER.info("granted_roles: %s", granted_roles)
+        return granted_roles
+
     def role_full_info_dict(self) -> dict:
         return {'service_level': self.attached_service_level,
                 'service_level_shares': self.attached_service_level_shares,
