@@ -11,6 +11,8 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events import Severity
 from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, is_consistent_cluster_management_feature_enabled
 from sdcm.wait import wait_for
+from sdcm.rest.raft_api import RaftApi
+
 
 LOGGER = logging.getLogger(__name__)
 RAFT_DEFAULT_SCYLLA_VERSION = "5.5.0-dev"
@@ -124,6 +126,9 @@ class RaftFeatureOperations(ABC):
         log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
         return list(map(self.get_message_waiting_timeout, log_patterns))
 
+    def call_read_barrier(self):
+        ...
+
 
 class RaftFeature(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]] = {
@@ -159,19 +164,24 @@ class RaftFeature(RaftFeatureOperations):
         state = self.get_status()
         return state == "use_post_raft_procedures"
 
+    def get_group0_id(self, session) -> str:
+        try:
+            row = session.execute("select value from system.scylla_local where key = 'raft_group0_id'").one()
+            return row.value
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            err_msg = f"Get group0 members failed with error: {exc}"
+            LOGGER.error(err_msg)
+            return ""
+
     def get_group0_members(self) -> list[dict[str, str]]:
         LOGGER.debug("Get group0 members")
         group0_members = []
         try:
             with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
-                row = session.execute("select value from system.scylla_local where key = 'raft_group0_id'").one()
-                if not row:
-                    return []
-                raft_group0_id = row.value
-
+                raft_group0_id = self.get_group0_id(session)
+                assert raft_group0_id, "Group0 id was not found"
                 rows = session.execute(f"select server_id, can_vote from system.raft_state  \
                                         where group_id = {raft_group0_id} and disposition = 'CURRENT'").all()
-
                 for row in rows:
                     group0_members.append({"host_id": str(row.server_id),
                                            "voter": row.can_vote})
@@ -311,6 +321,32 @@ class RaftFeature(RaftFeatureOperations):
 
         return not diff and not non_voters_ids and len(group0_ids) == len(token_ring_ids) == num_of_nodes
 
+    def call_read_barrier(self):
+        """ Verify all raft commits applied on node
+
+        Any schema/topology changes are committed with Raft on node. Before
+        change is written to node, raft checks that all previous schema/
+        topology changes were applied. Raft triggers read_barrier on node, and
+        node applies all previous changes(commits) before new schema/operation
+        write will be applied. After read barrier finished, it guarantees that
+        node has all schema/topology changes, which was done in cluster before
+        read_barrier started on node.
+        To issue a read barrier it is sufficient to attempt dropping a
+        non-existing table. We need to use `if exists`, otherwise the statement
+        would fail on prepare/validate step which happens before a read barrier is
+        performed
+
+        """
+        with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
+            raft_group0_id = self.get_group0_id(session)
+            assert raft_group0_id, "Group0 id was not found"
+        try:
+            api = RaftApi(self._node)
+            result = api.read_barrier(group_id=raft_group0_id)
+            LOGGER.debug("Api response %s", result)
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            LOGGER.error("Trigger read-barrier via rest api failed %s", exc)
+
 
 class NoRaft(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS = {
@@ -362,6 +398,9 @@ class NoRaft(RaftFeatureOperations):
         LOGGER.debug("Number of nodes in sct cluster %s", num_of_nodes)
 
         return len(token_ring_ids) == num_of_nodes
+
+    def call_read_barrier(self):
+        ...
 
 
 def get_raft_mode(node) -> RaftFeature | NoRaft:
