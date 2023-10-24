@@ -13,6 +13,7 @@
 
 import logging
 import os
+import re
 import uuid
 import random
 import json
@@ -99,7 +100,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         self.gemini_commands.append(cmd)
         return cmd
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):
+    def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
 
         cpu_options = ""
         if self.stress_num > 1:
@@ -116,6 +117,9 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         LOGGER.debug('gemini local log: %s', log_file_name)
 
         gemini_cmd = self._generate_gemini_command()
+        if gemini_schema := re.search(r'--schema (.*\.json)', gemini_cmd):
+            schema_file_path = gemini_schema.group(1)
+            docker.send_files(schema_file_path, schema_file_path)
         with cleanup_context, \
                 GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, \
                 GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:

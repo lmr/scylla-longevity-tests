@@ -1,0 +1,28 @@
+
+test_duration: 900
+n_db_nodes: 3
+n_test_oracle_db_nodes: 1
+n_loaders: 1
+n_monitor_nodes: 1
+
+gemini_cmd: "gemini -d --duration 4h --warmup 5m --schema scylla-qa-internal/custom_d1/posts.json \
+-c 50 -m mixed -f --non-interactive --cql-features normal \
+--max-mutation-retries 5 --max-mutation-retries-backoff 500ms \
+--async-objects-stabilization-attempts 5 --async-objects-stabilization-backoff 500ms \
+--replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}\" \
+--oracle-replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\""
+
+gce_instance_type_db: 'n1-highmem-4'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '111'
+nemesis_interval: 5
+
+user_prefix: 'longevity-3h-custom-d1'
+
+gce_n_local_ssd_disk_db: 2
+gce_pd_ssd_disk_size_db: 200
+
+stress_image:
+  gemini: 'scylladb/hydra-loaders:gemini-v1.8.7'
+
+use_preinstalled_scylla: true

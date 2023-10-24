@@ -1,0 +1,67 @@
+{
+	"keyspace": {
+		"replication": {
+			"class": "NetworkTopologyStrategy",
+			"replication_factor": 1
+		},
+		"oracle_replication": {
+			"class": "SimpleStrategy",
+			"replication_factor": 1
+		},
+		"name": "custom_d1"
+	},
+
+	"tables": [
+		{
+			"name": "tests",
+			"partition_keys": [{
+					"name": "test_id",
+					"type": "bigint"
+				},
+				{
+					"name": "build_no",
+					"type": "int"
+				}
+			],
+			"clustering_keys": [{
+					"name": "id",
+					"type": "bigint"
+				}
+			],
+			"columns": [{
+					"name": "good",
+					"type": {
+						"type_name": "something",
+						"frozen": true,
+						"complex_type": "udt",
+						"value_types": {
+							"id4": "bigint",
+							"name4": "text",
+							"response_type4": "tinyint"
+						}
+					}
+				},
+				{
+					"name": "some_id",
+					"type": "bigint"
+				}
+			],
+		    "table_options": [
+				"bloom_filter_fp_chance = 0.01",
+				"caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}",
+				"comment = ''",
+				"compaction = {'class': 'SizeTieredCompactionStrategy'}",
+				"compression = {'sstable_compression': 'org.apache.cassandra.io.compress.LZ4Compressor'}",
+				"crc_check_chance = 1.0",
+				"dclocal_read_repair_chance = 0.0",
+				"default_time_to_live = 0",
+				"gc_grace_seconds = 172800",
+				"max_index_interval = 2048",
+				"memtable_flush_period_in_ms = 0",
+				"min_index_interval = 128",
+				"read_repair_chance = 0.0",
+				"speculative_retry = '99.0PERCENTILE'"
+			  ]
+		}
+	]
+}

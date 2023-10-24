@@ -56,3 +56,30 @@ def test_01_gemini_thread(request, docker_scylla, params):
 
     results = gemini_thread.get_gemini_results()
     gemini_thread.verify_gemini_results(results)
+
+
+def test_02_gemini_thread(request, docker_scylla, params):
+    loader_set = LocalLoaderSetDummy()
+    test_cluster = DBCluster([docker_scylla])
+    cmd = (
+        "gemini -d --duration 1m --warmup 0s --schema unit_tests/test_data/gemini_schema.json -c 5 -m write "
+        "--non-interactive --cql-features basic --max-mutation-retries 100 --max-mutation-retries-backoff 100ms"
+    )
+    gemini_thread = GeminiStressThread(
+        loaders=loader_set,
+        stress_cmd=cmd,
+        test_cluster=test_cluster,
+        oracle_cluster=test_cluster,
+        timeout=420,
+        params=params,
+    )
+
+    def cleanup_thread():
+        gemini_thread.kill()
+
+    request.addfinalizer(cleanup_thread)
+
+    gemini_thread.run()
+    results = gemini_thread.get_gemini_results()
+    stats = gemini_thread.verify_gemini_results(results)
+    assert stats["results"][0]["write_ops"] > 0, "there were no writes, so possibly something went wrong"
