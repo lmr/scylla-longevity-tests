@@ -1,0 +1,17 @@
+test_duration: 1560
+stress_cmd: ["cassandra-harry -run-time 24 -run-time-unit HOURS"]
+
+n_db_nodes: 6
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.large'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ['!disruptive']
+nemesis_seed: '301'
+nemesis_interval: 5
+
+user_prefix: 'longevity-harry-24h'
+space_node_threshold: 64424
+use_mgmt: false

@@ -213,7 +213,7 @@ stress_image:
   alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
   cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
   kcl: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'
-  harry: 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'
+  harry: 'scylladb/hydra-loaders:cassandra-harry-jdk11-20230406'
 
 service_level_shares: [1000]
 

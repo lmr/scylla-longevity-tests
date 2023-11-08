@@ -7,8 +7,6 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i4i.large'
 
-root_disk_size_loader: 80 # enlarge loader disk, cause of cassandra-harry operation.log that can't be disabled
-
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '001'
 nemesis_interval: 2

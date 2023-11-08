@@ -1,0 +1,112 @@
+#   Licensed to the Apache Software Foundation (ASF) under one
+#   or more contributor license agreements.  See the NOTICE file
+#   distributed with this work for additional information
+#   regarding copyright ownership.  The ASF licenses this file
+#   to you under the Apache License, Version 2.0 (the
+#   "License"); you may not use this file except in compliance
+#   with the License.  You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+seed: 1596731732524
+
+# Default schema provider generates random schema
+schema_provider:
+  default: {}
+
+# Clock is a component responsible for mapping _logical_ timestamps to _real-time_ ones.
+#
+# When reproducing test failures, and for validation purposes, a snapshot of such clock can
+# be taken to map a real-time timestamp from the value retrieved from the database in order
+# to map it back to the logical timestamp of the operation that wrote this value.
+clock:
+  approximate_monotonic:
+    history_size: 7300
+    epoch_length: 1
+    epoch_time_unit: "SECONDS"
+
+drop_schema: false
+create_schema: true
+truncate_table: true
+
+# System under test: a Cassandra node or cluster. Default implementation is in_jvm (in-jvm DTest cluster).
+# Harry also supports external clusters.
+system_under_test:
+  external:
+    contact_points: 127.0.0.1
+    port: 9042
+    username: null
+    password: null
+
+# Partition descriptor selector controls how partitions is selected based on the current logical
+# timestamp. Default implementation is a sliding window of partition descriptors that will visit
+# one partition after the other in the window `slide_after_repeats` times. After that will
+# retire one partition descriptor, and pick one instead of it.
+partition_descriptor_selector:
+  default:
+    window_size: 10
+    slide_after_repeats: 100
+
+# Clustering descriptor selector controls how clusterings are picked within the partition:
+# how many rows there can be in a partition, how many rows will be visited for a logical timestamp,
+# how many operations there will be in batch, what kind of operations there will and how often
+# each kind of operation is going to occur.
+clustering_descriptor_selector:
+  default:
+    modifications_per_lts:
+      type: "constant"
+      constant: 2
+    rows_per_modification:
+      type: "constant"
+      constant: 2
+    operation_kind_weights:
+      DELETE_RANGE: 1
+      DELETE_SLICE: 1
+      DELETE_ROW: 1
+      DELETE_COLUMN: 1
+      DELETE_PARTITION: 1
+      DELETE_COLUMN_WITH_STATICS: 1
+      INSERT_WITH_STATICS: 50
+      INSERT: 50
+      UPDATE_WITH_STATICS: 50
+      UPDATE: 50
+    column_mask_bitsets: null
+    max_partition_size: 1000
+
+# Runner is a is a component that schedules operations that change the cluster (system under test)
+# and model state.
+runner:
+  sequential:
+    run_time: 2
+    run_time_unit: "HOURS"
+
+    visitors:
+      - logging:
+          row_visitor:
+            mutating: {}
+      - sampler:
+          sample_partitions: 10
+      - parallel_validate_recent_partitions:
+          partition_count: 100
+          queries_per_partition: 2
+          concurrency: 20
+          model:
+            quiescent_checker: {}
+      - validate_all_partitions:
+          concurrency: 20
+          model:
+            quiescent_checker: {}
+
+metric_reporter:
+  no_op: {}
+
+data_tracker:
+  locking:
+    max_seen_lts: -1
+    max_complete_lts: -1
