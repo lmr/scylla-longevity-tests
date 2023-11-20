@@ -856,8 +856,11 @@ class TestStatsMixin(Stats):
             }
             if scylla_conf and "scylla_args" not in setup_details:
                 scylla_server_conf = f"/etc/{'sysconfig' if node.distro.is_rhel_like else 'default'}/scylla-server"
-                setup_details.update({"scylla_args": output(f"grep ^SCYLLA_ARGS {scylla_server_conf}"),
-                                      "io_conf": output("grep -v ^# /etc/scylla.d/io.conf"),
+                setup_details.update({"scylla_args": output(f"grep ^SCYLLA_ARGS {scylla_server_conf}"), })
+                if node.has_seastar_conf:
+                    setup_details.update({"seastar.conf": output("cat /etc/scylla.d/seastar.conf"), })
+                else:
+                    setup_details.update({"io_conf": output("grep -v ^# /etc/scylla.d/io.conf"),
                                       "cpuset_conf": output("grep -v ^# /etc/scylla.d/cpuset.conf"), })
             sysctl_excludes = (
                 'net.bridge', 'net.ipv', 'net.netfilter', 'kernel.sched_', 'sunrpc',

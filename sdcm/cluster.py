@@ -575,13 +575,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # or
             #   'CPUSET="--cpuset 1-7,9-15,17-23,25-31 "'
             # And so on...
-            cpuset_file_lines = self.remoter.run("cat /etc/scylla.d/cpuset.conf").stdout
+
+            if self.has_seastar_conf:
+                cpuset_file_lines = self.remoter.run("cat /etc/scylla.d/seastar.conf").stdout
+                cpuset_startswith = "cpuset="
+            else:
+                cpuset_file_lines = self.remoter.run("cat /etc/scylla.d/seastar.conf").stdout
+                cpuset_startswith = "CPUSET="
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error(f"Failed to get CPUSET. Error: {exc}")
             return ''
 
         for cpuset_file_line in cpuset_file_lines.split("\n"):
-            if not cpuset_file_line.startswith("CPUSET="):
+            if not cpuset_file_line.startswith(cpuset_startswith):
                 continue
             scylla_cpu_set = re.findall(r'(\d+)-(\d+)|(\d+)', cpuset_file_line)
             self.log.debug(f"CPUSET on node {self.name}: {cpuset_file_line}")
@@ -722,6 +728,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             result = self.remoter.sudo("zypper search scylla-enterprise 2>&1", ignore_status=True).stdout
             return "scylla-enterprise" in result or "No matching items found" not in result
         return "scylla-enterprise" in self.remoter.sudo("apt-cache search scylla-enterprise", ignore_status=True).stdout
+
+    @cached_property
+    def has_seastar_conf(self):
+        result = self.remoter.run("ls /etc/scylla.d/seastar.conf", ignore_status=True)
+        return True if result.exit_status == 0 else False
 
     @property
     def public_ip_address(self) -> Optional[str]:
@@ -2122,8 +2133,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         result = self.remoter.run('cat /proc/mounts')
         assert ' /var/lib/scylla ' in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
         self.remoter.run('sudo sync')
-        self.log.info('io.conf right after setup')
-        self.remoter.run('sudo cat /etc/scylla.d/io.conf')
+        if self.has_seastar_conf:
+            self.log.info('seastar.conf right after setup')
+            self.remoter.run('sudo cat /etc/scylla.d/seastar.conf')
+        else:
+            self.log.info('io.conf right after setup')
+            self.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
         self.remoter.run('sudo systemctl enable scylla-server.service')
         self.remoter.run('sudo systemctl enable scylla-jmx.service')
@@ -2267,12 +2282,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         checklist = {
             SCYLLA_YAML_PATH: f'{INSTALL_DIR}{SCYLLA_YAML_PATH}',
             SCYLLA_PROPERTIES_PATH: f'{INSTALL_DIR}{SCYLLA_PROPERTIES_PATH}',
-            '/etc/scylla.d/io.conf': f'{INSTALL_DIR}/etc/scylla.d/io.conf',
             '/usr/bin/scylla': f'{INSTALL_DIR}/bin/scylla',
             '/usr/bin/nodetool': f'{INSTALL_DIR}/share/cassandra/bin/nodetool',
             '/usr/bin/cqlsh': f'{INSTALL_DIR}/share/cassandra/bin/cqlsh',
             '/usr/bin/cassandra-stress': f'{INSTALL_DIR}/share/cassandra/bin/cassandra-stress',
         }
+        if self.has_seastar_conf:
+            checklist['/etc/scylla.d/seastar.conf'] = f'{INSTALL_DIR}/etc/scylla.d/seastar.conf'
+        else:
+            checklist['/etc/scylla.d/io.conf'] = f'{INSTALL_DIR}/etc/scylla.d/io.conf'
         return checklist.get(abs_path, INSTALL_DIR + abs_path)
 
     def _service_cmd(self, service_name: str, cmd: str, timeout: int = 500, ignore_status=False):
@@ -2909,37 +2927,45 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         Created to implement the procedure described in:
         https://github.com/scylladb/scylla-docs/issues/4126
         """
+        if self.has_seastar_conf:
+            setup_cmd = "scylla_perftune_setup"
+            setup_args = "--setup-nic-and-disks"
+            conf_file = "/etc/scylla.d/seastar.conf"
+        else:
+            setup_cmd = "scylla_sysconfig_setup"
+            setup_args = f"--homedir /var/lib/scylla --confdir /etc/scylla"
+            conf_file = "/etc/scylla.d/cpuset.conf"
+
         # backup old config if it exists
-        self.log.info("Move current config files before running scylla_sysconfig setup...")
-        self.remoter.sudo("mv /etc/scylla.d/cpuset.conf /etc/scylla.d/cpuset.conf.old", ignore_status=True)
+        self.log.info(f"Move current config files before running {setup_cmd}...")
+        self.remoter.sudo(f"mv {conf_file} {conf_file}.old", ignore_status=True)
         self.remoter.sudo("mv /etc/scylla.d/perftune.yaml /etc/scylla.d/perftune.yaml.old", ignore_status=True)
 
         # run as sudo scylla_sysconfig_setup
-        self.log.info("Running scylla_sysconfig_setup as sudo...")
+        self.log.info(f"Running {setup_cmd} as sudo...")
         nic_name = self.get_nic_devices()[0]
-        syscofnig_result = self.remoter.sudo(f"scylla_sysconfig_setup --nic {nic_name} "
-                                             f"--homedir /var/lib/scylla --confdir /etc/scylla")
+        syscofnig_result = self.remoter.sudo(f"{setup_cmd} --nic {nic_name} {setup_args}")
         self.log.debug("Sysconfig command result:\nstdout: %s\nstderr: %s",
                        syscofnig_result.stdout, syscofnig_result.stderr)
 
         # compare old output witn new in scylla.d, use diff -q so we'll only get output if there is a difference
-        self.log.info("Comparing old config files vs new ones after running scylla_sysconfig_setup...")
+        self.log.info(f"Comparing old config files vs new ones after running {setup_cmd}...")
         cpuset_diff = self.remoter.run(
-            "diff -q /etc/scylla.d/cpuset.conf /etc/scylla.d/cpuset.conf.old", ignore_status=True)
+            f"diff -q {conf_file} {conf_file}.old", ignore_status=True)
 
         self.log.info("Comparison result:\nstdout: %s\nstderr: %s", cpuset_diff.stdout, cpuset_diff.stderr)
 
         # if the diff command failed, we don't have all the needed config files, so revert the backup
         if cpuset_diff.return_code != 0:
-            self.remoter.sudo("mv /etc/scylla.d/cpuset.conf.old /etc/scylla.d/cpuset.conf", ignore_status=True)
+            self.remoter.sudo(f"mv {conf_file}.old {conf_file}", ignore_status=True)
             self.remoter.sudo("mv /etc/scylla.d/perftune.yaml.old /etc/scylla.d/perftune.yaml", ignore_status=True)
-            self.log.info("Finished running scylla_sysconfig_setup")
+            self.log.info(f"Finished running {setup_cmd}")
             return False
 
         # restart is needed if the config files differ
         restart_needed = bool(cpuset_diff.stdout)
 
-        self.log.info("Finished running scylla_sysconfig_setup")
+        self.log.info(f"Finished running {setup_cmd}")
         return restart_needed
 
     def get_perftune_yaml(self) -> str:
@@ -4464,7 +4490,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.increase_jmx_heap_memory(jmx_memory)
                 node.restart_scylla_jmx()
 
-            self.log.debug('io.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
+            if node.has_seastar_conf:
+                self.log.debug('seastar.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/seastar.conf').stdout)
+            else:
+                self.log.debug('io.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
 
             if self.params.get('use_mgmt'):
                 self.install_scylla_manager(node)
