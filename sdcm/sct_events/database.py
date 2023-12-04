@@ -437,6 +437,33 @@ class ScyllaYamlUpdateEvent(InformationalEvent):
         return super().msgfmt + ": message={0.message}"
 
 
+class DataOperationsEvent(ContinuousEvent):
+    def __init__(self, message: Optional[str] = None, severity=Severity.NORMAL, publish_event=True):
+        self.message = message
+        super().__init__(publish_event=publish_event, severity=severity)
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt
+        if self.message:
+            fmt += ": message={0.message}"
+        return fmt
+
+
+class DataOperationsCaseEvent(ContinuousEvent):
+    def __init__(self, case: str, message: Optional[str] = None, severity=Severity.NORMAL, publish_event=True):
+        self.case = case
+        self.message = message
+        super().__init__(publish_event=publish_event, severity=severity)
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + ": case={0.case}"
+        if self.message:
+            fmt += " message={0.message}"
+        return fmt
+
+
 SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
     BootstrapEvent,

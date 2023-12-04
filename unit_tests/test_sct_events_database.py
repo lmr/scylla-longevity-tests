@@ -17,7 +17,8 @@ import re
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.database import \
-    DatabaseLogEvent, FullScanEvent, IndexSpecialColumnErrorEvent, TOLERABLE_REACTOR_STALL, SYSTEM_ERROR_EVENTS
+    DatabaseLogEvent, FullScanEvent, IndexSpecialColumnErrorEvent, TOLERABLE_REACTOR_STALL, SYSTEM_ERROR_EVENTS, DataOperationsEvent, \
+    DataOperationsCaseEvent
 
 
 class TestDatabaseLogEvent(unittest.TestCase):
@@ -137,3 +138,42 @@ class TestIndexSpecialColumnErrorEvent(unittest.TestCase):
         self.assertEqual(str(event),
                          "(IndexSpecialColumnErrorEvent Severity.ERROR) period_type=one-time "
                          "event_id=ac449879-485a-4b06-8596-3fbe58881093: message=m1")
+
+
+class TestDataOperationsEvent(unittest.TestCase):
+    def test_data_operation_event(self):
+        event = DataOperationsEvent(message="m1", publish_event=False)
+        event.event_id = "3c8e2362-a987-4eff-953f-9cd1ad2017e5"
+        event.begin_event()
+        self.assertEqual(
+            str(event),
+            "(DataOperationsEvent Severity.NORMAL) period_type=begin event_id=3c8e2362-a987-4eff-953f-9cd1ad2017e5: message=m1"
+        )
+
+        event.duration = 20.325
+        event.end_event()
+        self.assertEqual(
+            str(event),
+            "(DataOperationsEvent Severity.NORMAL) period_type=end event_id=3c8e2362-a987-4eff-953f-9cd1ad2017e5 duration=20.325s: "
+            "message=m1"
+        )
+
+
+class TestDataOperationsCaseEvent(unittest.TestCase):
+    def test_data_operation_event(self):
+        event = DataOperationsCaseEvent(case="delete partition", message="m1", publish_event=False)
+        event.event_id = "3c8e2362-a987-4eff-953f-9cd1ad2017e5"
+        event.begin_event()
+        self.assertEqual(
+            str(event),
+            "(DataOperationsCaseEvent Severity.NORMAL) period_type=begin event_id=3c8e2362-a987-4eff-953f-9cd1ad2017e5: "
+            "case=delete partition message=m1"
+        )
+
+        event.duration = 20.325
+        event.end_event()
+        self.assertEqual(
+            str(event),
+            "(DataOperationsCaseEvent Severity.NORMAL) period_type=end event_id=3c8e2362-a987-4eff-953f-9cd1ad2017e5 duration=20.325s: "
+            "case=delete partition message=m1"
+        )

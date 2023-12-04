@@ -135,3 +135,5 @@ ScyllaSysconfigSetupEvent: NORMAL
 TestStepEvent: ERROR
 CpuNotHighEnoughEvent: ERROR
 HWPerforanceEvent: CRITICAL
+DataOperationsEvent: CRITICAL
+DataOperationsCaseEvent: CRITICAL

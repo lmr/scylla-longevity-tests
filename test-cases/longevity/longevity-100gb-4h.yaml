@@ -28,3 +28,5 @@ pre_create_schema: True
 sstable_size: 100
 
 hinted_handoff: 'enabled'
+
+data_operation_ks_class: {'replication_factor': 3}

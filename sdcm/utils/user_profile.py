@@ -64,7 +64,15 @@ def get_view_name_from_stress_cmd(mv_create_cmd, name_substr):
     return find_mv_name.group(1) if find_mv_name else None
 
 
-def get_view_name_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str, view_name_substr: str):
+def get_view_name_by_stress_cmd(stress_cmd: str, view_name_substr: str, profile_content: dict = None):
+    if not profile_content:
+        _, profile_content = get_profile_content(stress_cmd)
+
+    mv_cmd = get_view_cmd_from_profile(profile_content, view_name_substr)
+    return get_view_name_from_stress_cmd(mv_cmd[0], view_name_substr)
+
+
+def get_view_name_by_test_yaml(params, stress_cmds_part: str, search_for_user_profile: str, view_name_substr: str):
     """
     Get materialized view name from user profile defined in the test yaml.
     It may be used when we want query from materialized view that was created during running user profile
@@ -74,12 +82,16 @@ def get_view_name_from_user_profile(params, stress_cmds_part: str, search_for_us
     if not stress_cmd:
         return ""
 
-    _, profile = get_profile_content(stress_cmd[0])
-    mv_cmd = get_view_cmd_from_profile(profile, view_name_substr)
-    return get_view_name_from_stress_cmd(mv_cmd[0], view_name_substr)
+    return get_view_name_by_stress_cmd(stress_cmd=stress_cmd[0], view_name_substr=view_name_substr)
 
 
-def get_keyspace_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str):
+def get_keyspace_by_stress_cmd(stress_cmd: str, profile_content: dict = None):
+    if not profile_content:
+        _, profile_content = get_profile_content(stress_cmd)
+    return profile_content['keyspace']
+
+
+def get_keyspace_by_test_yaml(params, stress_cmds_part: str, search_for_user_profile: str):
     """
      Get keyspace name from user profile defined in the test yaml.
      Example:
@@ -91,11 +103,16 @@ def get_keyspace_from_user_profile(params, stress_cmds_part: str, search_for_use
     if not stress_cmd:
         return ""
 
-    _, profile = get_profile_content(stress_cmd[0])
-    return profile['keyspace']
+    return get_keyspace_by_stress_cmd(stress_cmd=stress_cmd[0])
 
 
-def get_table_from_user_profile(params, stress_cmds_part: str, search_for_user_profile: str):
+def get_table_by_stress_cmd(stress_cmd: str, profile_content: dict = None):
+    if not profile_content:
+        _, profile_content = get_profile_content(stress_cmd)
+    return profile_content['table']
+
+
+def get_table_by_test_yaml(params, stress_cmds_part: str, search_for_user_profile: str):
     """
      Get table name from user profile defined in the test yaml.
      Example:
@@ -107,8 +124,7 @@ def get_table_from_user_profile(params, stress_cmds_part: str, search_for_user_p
     if not stress_cmd:
         return ""
 
-    _, profile = get_profile_content(stress_cmd[0])
-    return profile['table']
+    return get_table_by_stress_cmd(stress_cmd=stress_cmd[0])
 
 
 def get_profile_content(stress_cmd):

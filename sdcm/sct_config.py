@@ -472,6 +472,13 @@ class SCTConfiguration(dict):
         dict(name="ssh_transport", env="SSH_TRANSPORT", type=str,
              help="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'"""),
 
+        dict(name="data_operation_ks_class", env="SCT_DATA_OPERATION_KS_CLASS", type=dict,
+             help="""Keyspace definition for data operation thread. Example:
+                     {'replication_factor': 3}
+                     OR
+                     {'replication_factor': ['eu-westscylla_node_west': 3, 'us-west-2scylla_node_west': 2]}
+                     """),
+
         # Scylla command line arguments options
         dict(name="experimental_features", env="SCT_EXPERIMENTAL_FEATURES", type=list,
              help="unlock specified experimental features"),
@@ -1870,6 +1877,16 @@ class SCTConfiguration(dict):
         if self.get("use_dns_names"):
             if cluster_backend not in ("aws",):
                 raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
+
+        # 17 Validate run_fullscan parmeters
+        if data_operation_ks_class := self.get("data_operation_ks_class"):
+            if not data_operation_ks_class:
+                raise ValueError(
+                    f"data_operation_ks_class parameter must be not empty, but got: {data_operation_ks_class}")
+
+            if "replication_factor" not in data_operation_ks_class:
+                raise ValueError(f"data_operation_ks_class parameter is wrong defined. Expected 'replication_factor value' "
+                                 f"but got: {data_operation_ks_class}. Example: {'replication_factor': 3}")
 
     def log_config(self):
         self.log.info(self.dump_config())

@@ -1,0 +1,48 @@
+keyspace: data_operation_ks
+
+table: data_operation_cf
+
+table_definition: |
+
+  CREATE TABLE data_operation_cf (
+    username int,
+    first_name int,
+    last_name text,
+    password text,
+    email text,
+    last_access timestamp,
+    PRIMARY KEY(username, first_name)
+  );
+
+extra_definitions:
+  - CREATE MATERIALIZED VIEW data_operation_ks.data_operation_cf_by_password AS SELECT * FROM data_operation_ks.data_operation_cf WHERE password IS NOT NULL and username IS NOT NULL and first_name IS NOT NULL PRIMARY KEY (password, first_name, username);
+  - CREATE MATERIALIZED VIEW data_operation_ks.data_operation_cf_by_last_name AS SELECT * FROM data_operation_ks.data_operation_cf WHERE last_name IS NOT NULL and username IS NOT NULL and first_name IS NOT NULL PRIMARY KEY (last_name, first_name, username);
+
+columnspec:
+  - name: username
+    population: seq(1..10000)
+  - name: first_name
+    cluster: uniform(1..2000)         #under each username we will have max 2000 posts
+  - name: last_name
+    size: uniform(1..32)
+  - name: password
+    size: fixed(80) # sha-512
+    cluster: uniform(1..200)         #under each username we will have max 2000 posts
+  - name: email
+    size: uniform(16..50)
+
+insert:
+  partitions: fixed(10)
+  select:    fixed(10)/1000
+  batchtype: UNLOGGED
+
+queries:
+  read1:
+    cql: select * from data_operation_ks.data_operation_cf where username = ? and first_name = ? LIMIT 10
+    fields: samerow
+  read2:
+    cql: select * from data_operation_ks.data_operation_cf_by_password where username = ? and first_name = ? and password = ? LIMIT 1
+    fields: samerow
+  read3:
+    cql: select * from data_operation_ks.data_operation_cf_by_last_name where username = ? and first_name = ? and last_name = ? LIMIT 1
+    fields: samerow

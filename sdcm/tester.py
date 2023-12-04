@@ -55,6 +55,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
+from sdcm.data_operations.data_operation import DataOperationThread
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import provisioner_factory
 from sdcm.scan_operation_thread import ScanOperationThread
@@ -2166,6 +2167,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             the ScanOperationThread
         """
         ScanOperationThread(thread_params=fullscan_params, thread_name=thread_name).start()
+
+    def run_data_operations_thread(self, thread_name: str = "DataOperations"):
+        """
+        Run thread that performs changes in the data in its own keyspace in parallel with test nemeses.
+        Current operations are row deletions.
+        Operations may be added in the future
+        """
+        DataOperationThread(tester=self, thread_name=thread_name).start()
 
     def run_tombstone_gc_verification_thread(self, duration=None, interval=600, propagation_delay_in_seconds=3600, **kwargs):
         """Run a thread of tombstones gc verification.

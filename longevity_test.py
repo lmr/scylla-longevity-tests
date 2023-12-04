@@ -132,6 +132,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_pre_create_keyspace()
         self.run_pre_create_schema()
 
+        if self.params.get("data_operation_ks_class"):
+            self.run_data_operations_thread()
+
         if scan_operation_params := self._get_scan_operation_params():
             for scan_param in scan_operation_params:
                 self.log.info("Starting fullscan operation thread with the following params: %s", scan_param)
