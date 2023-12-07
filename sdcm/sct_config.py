@@ -1513,6 +1513,8 @@ class SCTConfiguration(dict):
 
         dict(name="validate_large_collections", env="SCT_VALIDATE_LARGE_COLLECTIONS", type=boolean,
              help="Enable validation for large cells in system table and logs"),
+        dict(name="new_instance_type", env="SCT_NEW_INSTANCE_TYPE", type=str,
+             help="New instance type to upscale or downscale a node"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

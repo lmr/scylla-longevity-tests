@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'full_cluster_replacement_test.FullClusterReplacement.test_rolling_full_cluster_replacement_add_then_decommission_nodes',
+    test_config: 'test-cases/features/full-cluster-replacement.yaml',
+
+    timeout: [time: 270, unit: 'MINUTES']
+)

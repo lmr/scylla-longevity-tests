@@ -1,0 +1,33 @@
+test_duration: 1440
+
+prepare_write_cmd:  ["cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..275050075",
+                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=275050076..550100150",
+                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=550100151..825150225",
+                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=825150226..1100200300",
+                    "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10000 -clustering-row-count=555 -clustering-row-size=uniform:128..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data"
+                    ]
+# post_prepare_cql_cmds: ['CREATE MATERIALIZED VIEW keyspace1.sort_by_C1 AS SELECT key, "C1" FROM keyspace1.standard1 WHERE "C1" IS NOT NULL and key IS NOT NULL PRIMARY KEY ("C1", key)'
+# Add the MV after the bug is resolved. Ref: https://github.com/scylladb/scylladb/issues/15717
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=10000 -clustering-row-count=555 -clustering-row-size=uniform:128..2048 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=60m -validate-data"
+             ]
+
+availability_zone: 'a,b'
+region_name: 'us-east-1 eu-west-1'
+n_db_nodes: '4 4'
+n_loaders: 4
+instance_type_loader: 'c5.2xlarge'
+n_monitor_nodes: 1
+seeds_num: 3
+
+instance_type_db: 'i4i.xlarge'
+user_prefix: 'full-cluster-replacement-multiAZ-multiDC'
+nemesis_class_name: 'NoOpMonkey'
+
+server_encrypt: true
+client_encrypt: true
+
+nemesis_during_prepare: false
+use_preinstalled_scylla: true

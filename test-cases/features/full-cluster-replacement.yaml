@@ -1,0 +1,26 @@
+test_duration: 300
+
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+
+# post_prepare_cql_cmds: ['CREATE MATERIALIZED VIEW keyspace1.sort_by_C1 AS SELECT key, "C1" FROM keyspace1.standard1 WHERE "C1" IS NOT NULL and key IS NOT NULL PRIMARY KEY ("C1", key)'
+# Add the MV after the bug is resolved. Ref: https://github.com/scylladb/scylladb/issues/15717
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+             ]
+
+region_name: 'eu-west-1'
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+seeds_num: 3
+
+instance_type_db: 'i4i.4xlarge'
+user_prefix: 'full-cluster-replacement-add-decommission'
+nemesis_class_name: 'NoOpMonkey'
+
+server_encrypt: true
+client_encrypt: true
+
+nemesis_during_prepare: false
+use_preinstalled_scylla: true

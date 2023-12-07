@@ -353,3 +353,4 @@
 | **<a href="#user-content-custom_es_index" name="custom_es_index">custom_es_index</a>**  | Use custom ES index for storing test results | N/A | SCT_CUSTOM_ES_INDEX
 | **<a href="#user-content-simulated_racks" name="simulated_racks">simulated_racks</a>**  | Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.<br>Provide number of racks to simulate. | N/A | SCT_SIMULATED_RACKS
 | **<a href="#user-content-use_dns_names" name="use_dns_names">use_dns_names</a>**  | Use dns names instead of ip addresses for nodes in cluster | N/A | SCT_USE_DNS_NAMES
+| **<a href="#user-content-upscale_instance_type</a>**  |   New instance type to pass to the add_nodes method for upscale/downscale cluster tests | N/A | SCT_NEW_INSTANCE_TYPE
