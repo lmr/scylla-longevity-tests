@@ -34,7 +34,7 @@ cluster_health_check: true
 
 add_node_cnt: 1
 
-reuse_cluster: false
+reuse_cluster: null
 nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: true
 nemesis_interval: 5

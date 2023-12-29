@@ -697,7 +697,7 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
                 if not scylla_version or scylla_version.endswith(":latest"):
                     # NOTE: in case we run Scylla cluster with "latest" version then we need
                     #       to pick up a more precise version from one of it's nodes, i.e. '4.7.dev'
-                    scylla_version = cluster_object.nodes[0].scylla_version
+                    scylla_version = cluster_object.nodes[0].artifact_scylla_version
             except (AttributeError, IndexError) as exc:
                 LOGGER.warning("Failed to get scylla version: %s", exc)
                 scylla_version = "n/a"

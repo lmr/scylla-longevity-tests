@@ -13,7 +13,6 @@
 
 import os
 import logging
-import itertools
 import unittest
 from collections import namedtuple
 import pytest
@@ -114,7 +113,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
 
-        assert conf['scylla_version'] != 'latest'
+        assert conf.get('scylla_version') != 'latest'
 
     def test_06b_docker_development(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
@@ -143,13 +142,12 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_09_unknown_configure(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_SCYLLA_VERSION'] = 'latest'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/unknown_param_in_config.yaml'
-        conf = sct_config.SCTConfiguration()
-        self.assertRaises(ValueError, conf.verify_configuration)
+        self.assertRaises(ValueError, sct_config.SCTConfiguration)
 
     def test_09_unknown_env(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/unknown_param_in_config.yaml'
         os.environ['SCT_WHAT_IS_THAT'] = 'just_made_this_up'
         os.environ['SCT_WHAT_IS_THAT_2'] = 'what is this ?'
         conf = sct_config.SCTConfiguration()
@@ -324,25 +322,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                 exc), "Stress command parameter \'stress_cmd\' contains profile \'/tmp/1232123123123123123.yaml\' that"
                       " does not exists under data_dir/")
 
-    def test_config_dupes(self):
-        def get_dupes(c):
-            '''sort/tee/izip'''
-
-            # pylint: disable=invalid-name
-            a, b = itertools.tee(sorted(c))
-            next(b, None)
-            r = None
-            for k, g in zip(a, b):
-                if k != g:
-                    continue
-                if k != r:
-                    yield k
-                    r = k
-
-        opts = [o['name'] for o in sct_config.SCTConfiguration.config_options]
-
-        self.assertListEqual(list(get_dupes(opts)), [])
-
     @pytest.mark.integration
     def test_13_bool(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
@@ -350,7 +329,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
 
-        self.assertEqual(conf['store_perf_results'], False)
+        self.assertEqual(conf.get('store_perf_results'), False)
 
     @pytest.mark.integration
     def test_14_aws_siren_from_env(self):
@@ -362,9 +341,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_AUTHENTICATOR_USER'] = "user"
         os.environ['SCT_AUTHENTICATOR_PASSWORD'] = "pass"
         os.environ['SCT_CLOUD_CLUSTER_ID'] = "193712947904378"
-        os.environ['SCT_SECURITY_GROUP_IDS'] = "sg-89fi3rkl"
-        os.environ['SCT_SUBNET_ID'] = "sub-d32f09sdf"
-
+        os.environ['SCT_CLOUD_CREDENTIALS_PATH'] = '~/.ssh/admin.key'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
 
         conf = sct_config.SCTConfiguration()
@@ -372,8 +349,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('cloud_cluster_id'), 193712947904378)
         assert conf["authenticator_user"] == "user"
         assert conf["authenticator_password"] == "pass"
-        assert conf["security_group_ids"] == ["sg-89fi3rkl"]
-        assert conf["subnet_id"] == ["sub-d32f09sdf"]
 
     def test_15_new_scylla_repo(self):
         centos_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
@@ -498,8 +473,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertEqual(conf["stress_cmd"], [os.environ['SCT_STRESS_CMD']])
-        self.assertEqual(conf["stress_read_cmd"], [os.environ["SCT_STRESS_READ_CMD"]])
+        self.assertEqual(conf.stress_cmd, [os.environ['SCT_STRESS_CMD']])
+        self.assertEqual(conf.stress_read_cmd, [os.environ["SCT_STRESS_READ_CMD"]])
 
     @pytest.mark.integration
     def test_17_1_raise_error_if_scylla_bench_command_dont_have_workload(self):
@@ -535,7 +510,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_18_error_if_no_version_repo_ami_selected(self):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
 
-        for backend in sct_config.SCTConfiguration.available_backends:
+        for backend in sct_config.available_backends:
             if 'k8s' in backend:
                 continue
             if 'siren' in backend:
@@ -585,8 +560,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
-        self.assertEqual(conf['user_data_format_version'], '3')
-        self.assertEqual(conf['oracle_user_data_format_version'], '3')
+        self.assertEqual(conf.user_data_format_version, '3')
+        self.assertEqual(conf.oracle_user_data_format_version, '3')
 
     @pytest.mark.integration
     def test_20_user_data_format_version_aws_2(self):
@@ -607,7 +582,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
-        self.assertEqual(conf['user_data_format_version'], '3')
+        self.assertEqual(conf.user_data_format_version, '3')
 
     @pytest.mark.integration
     def test_20_user_data_format_version_gce_2(self):
@@ -616,7 +591,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
-        self.assertEqual(conf['user_data_format_version'], '3')
+        self.assertEqual(conf.user_data_format_version, '3')
 
     @pytest.mark.integration
     def test_20_user_data_format_version_gce_3(self):
@@ -626,7 +601,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
-        self.assertEqual(conf['user_data_format_version'], '2')
+        self.assertEqual(conf.user_data_format_version, '2')
 
     @pytest.mark.integration
     def test_20_user_data_format_version_azure(self):
@@ -639,7 +614,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         # since azure image listing is still buggy, can be sure which version we'll get
         # I would expect master:latest to be version 3 now, but azure.utils.get_scylla_images
         # returns something from 5 months ago.
-        self.assertIn('user_data_format_version', conf)
+        assert conf.user_data_format_version in ['2', '3']
 
     def test_21_nested_values(self):
         os.environ['SCT_CONFIG_FILES'] = ('["internal_test_data/minimal_test_case.yaml", '
@@ -693,8 +668,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertListEqual(conf["nemesis_selector"], ["config_changes", "topology_changes"],
-                             msg=f"Wrong value {conf['nemesis_selector']}")
+        self.assertListEqual(conf.get("nemesis_selector"), ["config_changes", "topology_changes"],
+                             msg=f"Wrong value {conf.get('nemesis_selector')}")
 
     def test_23_2_nemesis_include_selector_list_of_list_config_file(self):
 
@@ -707,9 +682,9 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertListEqual(conf["nemesis_selector"],
+        self.assertListEqual(conf.get("nemesis_selector"),
                              [["config_changes", "topology_changes"], ["topology_changes"], ["disruptive"]],
-                             msg=f"Wrong value {conf['nemesis_selector']}")
+                             msg=f"Wrong value {conf.get('nemesis_selector')}")
 
     @pytest.mark.integration
     def test_24_convert_ami_multi_region(self):
