@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    test_name: "performance_regression_test.PerformanceRegressionTest",
+    test_config: '''["test-cases/commitlog/perf-commit-log-test-hard-limit.yaml",  "test-cases/commitlog/perf-commit-log-test-soft-limit.yaml", "configurations/run_db_node_benchmarks.yaml"]''',
+    sub_tests: ["test_write"],
+    test_email_title: "perf-commit-log-soft-limit",
+
+    timeout: [time: 350, unit: "MINUTES"]
+)

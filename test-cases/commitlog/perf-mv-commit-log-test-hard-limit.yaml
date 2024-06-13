@@ -1,0 +1,5 @@
+test_duration: 900
+
+stress_cmd_w: "cassandra-stress user profile=/tmp/cs_mv_commitlog_profile.yaml ops'(insert=1,read1=1,read2=1,read3=1)' duration=120m -mode cql3 native -rate threads=7"
+
+append_scylla_args: '--commitlog-total-space-in-mb 28672 --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 -m 56GB --commitlog-use-hard-size-limit true'

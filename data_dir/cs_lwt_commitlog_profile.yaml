@@ -1,0 +1,75 @@
+# LWT test: create and update data using LWT.
+### DML ###
+
+# Keyspace Name
+keyspace: lwt_commitlog
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS lwt_commitlog WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1};
+
+# Table name
+table: blogposts
+
+# The CQL for creating a table you wish to stress (optional if it already exists)
+table_definition: |
+  CREATE TABLE IF NOT EXISTS blogposts (
+        domain int,
+        published_date int,
+        lwt_indicator int,
+        url text,
+        author text,
+        title text,
+        content text,
+        PRIMARY KEY(domain, published_date)
+  ) WITH compaction = { 'class':'LeveledCompactionStrategy' }
+    AND comment='A table to hold blog posts'
+
+columnspec:
+  - name: domain
+    population: seq(1..3000)  #10M possible domains to pick from
+
+  - name: published_date
+    cluster: uniform(1..100)         #under each domain we will have max 1000 posts
+
+  - name: lwt_indicator
+    population: seq(1..1001000)
+
+  - name: url
+    size: uniform(30..30)
+
+  - name: title                  #titles shouldn't go beyond 200 chars
+    size: gaussian(10..20)
+
+  - name: author
+    size: uniform(5..20)         #author names should be short
+
+  - name: content
+    size: fixed(10000)
+
+### Batch Ratio Distribution Specifications ###
+
+insert:
+  partitions: fixed(1)            # Our partition key is the domain so only insert one per batch
+
+  select:    fixed(1)/1000        # We have 1000 posts per domain so 1/1000 will allow 1 post per batch
+
+  batchtype: UNLOGGED             # Unlogged batches
+
+
+#
+# A list of queries you wish to run against the schema
+#
+queries:
+   insert_query:
+      cql: insert into blogposts (domain, published_date, lwt_indicator, url, author, title) values (?,?,?,?,?,?) if not exists
+      fields: samerow
+   select:
+      cql: select * from blogposts where domain = ? LIMIT 1
+      fields: samerow
+   lwt_update_one_column:
+      cql: update blogposts set lwt_indicator = 30000000 where domain = ? and published_date = ? if lwt_indicator >=-150000 and lwt_indicator < 0
+      fields: samerow
+   lwt_update_two_columns:
+      cql: update blogposts set lwt_indicator = 20000000, author = 'text' where domain = ? and published_date = ? if lwt_indicator > 0 and lwt_indicator <= 150000 and author != 'text'
+      fields: samerow

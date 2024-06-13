@@ -115,7 +115,7 @@ class PerformanceQueryFilter(QueryFilter):
         def get_query_filter_by_job_folder(job_item):
             filter_query = ""
             if job_name[0] and job_name[0] in job_item['job_folder']:
-                base_job_name = job_name[1]
+                base_job_name = '\/'.join(job_name[1:])  # pylint: disable=anomalous-backslash-in-string
                 if self.use_wide_query:
                     filter_query = rf'test_details.job_name.keyword: {job_name[0]}\/{base_job_name}'
                 else:

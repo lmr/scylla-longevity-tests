@@ -1,0 +1,1 @@
+append_scylla_args: '--commitlog-total-space-in-mb=448 --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 -m 56GB --commitlog-use-hard-size-limit=false'

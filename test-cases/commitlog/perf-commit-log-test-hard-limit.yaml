@@ -1,0 +1,36 @@
+test_duration: 300
+
+stress_cmd_w: "cassandra-stress write 'keysize=64000' duration=60m no-warmup -rate threads=7 -pop seq=0..120000 -col 'size=FIXED(0) n=FIXED(1)'"
+stress_multiplier_w: 6
+
+
+# NOTE: following is needed for the K8S case
+k8s_loader_run_type: 'static'
+
+n_db_nodes: 1
+n_loaders: 3
+n_monitor_nodes: 1
+
+
+# AWS
+instance_type_db: 'i4i.2xlarge'
+instance_type_loader: 'c5.2xlarge'
+instance_type_monitor: 't3.small'
+#------
+
+user_prefix: 'perf-commitlog-i4i'
+
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+use_mgmt: false
+send_email: true
+email_recipients: ['artsiom.mishuta@scylladb.com']
+
+custom_es_index: 'performancestatsv2'
+use_hdr_cs_histogram: true
+
+append_scylla_args: '--logger-log-level commitlog=trace --blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 -m 56GB --enable-cache=false --commitlog-use-hard-size-limit=true'
+
+use_placement_group: true
