@@ -59,7 +59,7 @@ class TestReplicationStrategies:
 class Cluster:  # pylint: disable=unused-argument,too-few-public-methods
     class Session:
         @staticmethod
-        def execute(cql):
+        def execute(cql, connect_timeout=60, timeout=60):
             if 'some error' in cql:
                 raise AttributeError("found some error")
             print(cql)
@@ -71,7 +71,7 @@ class Cluster:  # pylint: disable=unused-argument,too-few-public-methods
             pass
 
     @staticmethod
-    def cql_connection_patient(node):
+    def cql_connection_patient(node, connect_timeout=60, timeout=60):
         return Cluster.Session()
 
 
@@ -80,7 +80,7 @@ class Node():  # pylint: disable=too-few-public-methods
     def __init__(self):
         self.parent_cluster = Cluster()
 
-    def run_cqlsh(self, cql):  # pylint: disable=no-self-use
+    def run_cqlsh(self, cql, connect_timeout=60, timeout=60):  # pylint: disable=no-self-use
         if 'some error' in cql:
             raise AttributeError("found some error")
         print(cql)

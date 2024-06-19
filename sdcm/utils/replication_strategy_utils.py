@@ -22,13 +22,15 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
 
     @classmethod
     def get(cls, node: BaseNode, keyspace: str):
-        create_ks_statement = node.run_cqlsh(f"describe {keyspace}").stdout.splitlines()[1]
+        create_ks_statement = node.run_cqlsh(
+            f"describe {keyspace}", connect_timeout=300, timeout=300).stdout.splitlines()[1]
         return ReplicationStrategy.from_string(create_ks_statement)
 
     def apply(self, node: BaseNode, keyspace: str):
         cql = f'ALTER KEYSPACE {cql_quote_if_needed(keyspace)} WITH replication = {self}'
-        with node.parent_cluster.cql_connection_patient(node) as session:
-            session.execute(cql)
+        with node.parent_cluster.cql_connection_patient(node, connect_timeout=600) as session:
+            session.default_timeout = 600.0
+            session.execute(cql, timeout=900)
 
 
 class SimpleReplicationStrategy(ReplicationStrategy):

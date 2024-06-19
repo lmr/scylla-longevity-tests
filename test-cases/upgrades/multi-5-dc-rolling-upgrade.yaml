@@ -1,0 +1,31 @@
+test_duration: 1800
+# Workloads
+stress_before_upgrade: cassandra-stress write no-warmup cl=ALL n=10100200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10100200 -log interval=5
+stress_during_entire_upgrade: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=60 -pop seq=10100201..30200400 -log interval=5
+stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=30200400 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..30200400 -log interval=5
+
+instance_type_db: 'i4i.2xlarge'
+n_db_nodes: '3 3 3 3 3'
+n_loaders: '1 1 1 1 1'
+n_monitor_nodes: 1
+region_aware_loader: true
+num_nodes_to_rollback: 5   # max is n_db_nodes -1, after upgrading 4 nodes last node can't be rollback
+
+region_name: 'us-west-2 us-east-1 eu-west-2 eu-west-1 eu-central-1'
+
+user_prefix: 'multi-5-dc-rolling-upgrade'
+
+server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+
+internode_compression: 'all'
+
+use_mgmt: false
+
+# those are needed to be give by the job, via environment variable
+# for the base version
+# SCT_SCYLLA_VERSION=3.0 or SCT_SCYLLA_REPO=
+# for the upgrading version you need:
+# SCT_NEW_SCYLLA_REPO=

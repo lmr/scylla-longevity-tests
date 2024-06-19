@@ -2809,8 +2809,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         ssl_params = '--ssl' if self.parent_cluster.params.get("client_encrypt") else ''
         options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} " \
                   "--connect-timeout={connect_timeout} {ssl_params}".format(
-                      auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout,
-                      connect_timeout=connect_timeout, ssl_params=ssl_params)
+                      auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout + 600,
+                      connect_timeout=connect_timeout + 300, ssl_params=ssl_params)
 
         # cqlsh uses rpc_address/broadcast_rps_address.
         host = '' if self.is_docker() else self.cql_address
@@ -4668,7 +4668,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if self.params.get('use_mgmt') and self.node_type == "scylla-db":  # pylint: disable=no-member
             self.install_scylla_manager(node)
 
-    def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
+    def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 10800):
         if not self.test_config.REUSE_CLUSTER:
             self.log.debug('io.conf before reboot: %s', node.remoter.sudo(
                 f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
