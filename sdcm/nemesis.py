@@ -4228,7 +4228,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with context_manager:
             for node in self.cluster.nodes:
                 node_system_logs[node] = node.follow_system_log(
-                    patterns=[f'messaging_service - Reloaded {{"{ssl_files_location}"}}'])
+                    patterns=f'messaging_service - Reloaded {{{ssl_files_location}}}')
                 node.remoter.send_files(src='data_dir/ssl_conf/db.crt', dst='/tmp')
                 node.remoter.run(f"sudo cp -f /tmp/db.crt {ssl_files_location}")
                 new_crt = node.remoter.run(f"cat {ssl_files_location}").stdout
