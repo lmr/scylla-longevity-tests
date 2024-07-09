@@ -6,7 +6,7 @@ keyspace: cqlstress_lwt_example
 
 # The CQL for creating a keyspace (optional if it already exists)
 keyspace_definition: |
-  CREATE KEYSPACE IF NOT EXISTS cqlstress_lwt_example WITH replication = {'class': 'NetworkTopologyStrategy', 'eu-westscylla_node_west': 3, 'us-west-2scylla_node_west': 2, 'us-eastscylla_node_east': 1};
+  CREATE KEYSPACE IF NOT EXISTS cqlstress_lwt_example WITH replication = {'class': 'NetworkTopologyStrategy', 'eu-westscylla_node_west': 2, 'us-eastscylla_node_east': 1};
 
 # Table name
 table: blogposts

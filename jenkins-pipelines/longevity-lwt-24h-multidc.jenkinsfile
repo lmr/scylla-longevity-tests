@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    region: '''["eu-west-1", "us-west-2", "us-east-1"]''',
+    region: '''["eu-west-1", "us-east-1"]''',
     test_name: 'longevity_lwt_test.LWTLongevityTest.test_lwt_longevity',
     test_config: 'test-cases/longevity/longevity-lwt-24h-multidc.yaml'
 

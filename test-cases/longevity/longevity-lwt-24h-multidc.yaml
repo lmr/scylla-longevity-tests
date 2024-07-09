@@ -1,21 +1,21 @@
 test_duration: 1560
-prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data_multidc.yaml n=10000000 ops'(insert_query=1)' cl=LOCAL_QUORUM serial-cl=LOCAL_SERIAL -mode native cql3 -rate threads=1000" ]
-stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data_multidc.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=LOCAL_QUORUM serial-cl=LOCAL_SERIAL duration=1350m -mode native cql3 -rate threads=800" ]
-stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data_multidc.yaml ops'(select=1)' cl=LOCAL_QUORUM serial-cl=LOCAL_SERIAL duration=1350m -mode native cql3 -rate threads=800" ]
+prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data_multidc.yaml n=10000 ops'(insert_query=1)' cl=LOCAL_QUORUM serial-cl=LOCAL_SERIAL -mode native cql3 -rate threads=1000" ]
+stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data_multidc.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=LOCAL_QUORUM serial-cl=LOCAL_SERIAL duration=10m -mode native cql3 -rate threads=800" ]
+stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data_multidc.yaml ops'(select=1)' cl=LOCAL_QUORUM serial-cl=LOCAL_SERIAL duration=10m -mode native cql3 -rate threads=800" ]
 
-n_db_nodes: '4 3 2'
-n_loaders: '1 1 1'
+n_db_nodes: '4 1'
+n_loaders: '1 1'
 n_monitor_nodes: 1
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i4i.xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'NoOpMonkey'
 nemesis_seed: '018'
 nemesis_interval: 5
 nemesis_during_prepare: false
 space_node_threshold: 64424
 
-user_prefix: 'lwt-longevity-multi-dc-24h'
+user_prefix: 'lwt-longevity-multi-dc-reproducer'
 
 server_encrypt: true
 internode_encryption: 'dc'
