@@ -5371,7 +5371,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
     @property
     def monitoring_version(self):
-        scylla_version = self.targets["db_cluster"].nodes[0].scylla_version
+        scylla_version = self.targets["db_cluster"].nodes[0].artifact_scylla_version
         self.log.debug("Using %s ScyllaDB version to derive monitoring version", scylla_version)
         if scylla_version and "dev" not in scylla_version:
             if version := re.match(r"(\d+\.\d+)", scylla_version):

@@ -656,7 +656,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "gemini_write_ops": results.get("write_ops", -1),
                 "oracle_node_ami_id": self.params.get("ami_id_db_oracle"),
                 "oracle_node_instance_type": self.params.get("instance_type_db_oracle"),
-                "oracle_node_scylla_version": self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
+                "oracle_node_scylla_version": self.cs_db_cluster.nodes[0].artifact_scylla_version if self.cs_db_cluster else "N/A",
                 "oracle_nodes_count": self.params.get("n_test_oracle_db_nodes"),
             })
         except Exception:  # pylint: disable=broad-except  # noqa: BLE001
@@ -865,7 +865,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def prepare_kms_host(self) -> None:
         version_supports_kms = (self.params.is_enterprise and
-                                ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3')
+                                ComparableScyllaVersion(self.params.artifact_scylla_version) >= '2023.1.3')
         backend_support_kms = self.params.get('cluster_backend') in ('aws',)
         kms_configured_in_sct = self.params.get('scylla_encryption_options')
         test_uses_oracle = self.params.get("db_type") == "mixed_scylla"
@@ -1318,7 +1318,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
         azure_image = self.params.get("azure_image_db").strip()
         user_prefix = self.params.get('user_prefix')
-        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
+        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('UserRemoteCredentials')))
 
         common_params = dict(
             credentials=self.credentials,
