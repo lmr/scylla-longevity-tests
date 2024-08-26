@@ -15,7 +15,7 @@ import os
 import re
 import time
 import logging
-from typing import Dict, Any, ParamSpec, TypeVar
+from typing import Dict, Any, Optional, ParamSpec, TypeVar
 from textwrap import dedent
 from functools import cached_property, cache
 from collections.abc import Callable
@@ -67,7 +67,7 @@ class GCENode(cluster.BaseNode):
 
     log = LOGGER
 
-    def __init__(self, gce_instance: compute_v1.Instance,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_instance: compute_v1.Instance,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  gce_service: compute_v1.InstancesClient,
                  credentials,
                  parent_cluster,
@@ -76,7 +76,8 @@ class GCENode(cluster.BaseNode):
                  base_logdir: str = None,
                  dc_idx: int = 0,
                  rack: int = 0,
-                 gce_project: str = None):
+                 gce_project: str = None,
+                 shard_num: Optional[int] = None):
         name = f"{node_prefix}-{dc_idx}-{node_index}".lower()
         self.node_index = node_index
         self.project = gce_project
@@ -94,7 +95,8 @@ class GCENode(cluster.BaseNode):
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
                          dc_idx=dc_idx,
-                         rack=rack)
+                         rack=rack,
+                         shard_num=shard_num)
 
     def refresh_network_interfaces_info(self):
         pass
@@ -252,7 +254,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                  cluster_uuid=None, gce_instance_type='n2-standard-1', gce_region_names=None,
                  gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None,
-                 service_accounts=None, add_nodes=True):
+                 service_accounts=None, add_nodes=True, nodes_smp=[]):
 
         # pylint: disable=too-many-locals
         self._gce_image = gce_image
@@ -277,7 +279,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                          params=params,
                          region_names=gce_region_names,
                          node_type=node_type,
-                         add_nodes=add_nodes)
+                         add_nodes=add_nodes,
+                         nodes_smp=nodes_smp)
         self.log.debug("GCECluster constructor")
 
     def __str__(self):
@@ -497,7 +500,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            node_index=node_index,
                            base_logdir=self.logdir,
                            dc_idx=dc_idx,
-                           rack=rack)
+                           rack=rack,
+                           shard_num=self.get_node_shard_num(node_index))
             node.init()
             return node
         except Exception as ex:  # noqa: BLE001
@@ -540,7 +544,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  gce_instance_type='n2-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
-                 user_prefix=None, n_nodes=3, add_disks=None, params=None, gce_datacenter=None, service_accounts=None):
+                 user_prefix=None, n_nodes=3, add_disks=None, params=None, gce_datacenter=None, service_accounts=None, nodes_smp=[]):
         # pylint: disable=too-many-locals
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
@@ -563,6 +567,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
             gce_region_names=gce_datacenter,
             node_type='scylla-db',
             service_accounts=service_accounts,
+            nodes_smp=nodes_smp,
         )
         self.version = '2.1'
 

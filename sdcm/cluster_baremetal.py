@@ -37,7 +37,7 @@ class PhysicalMachineNode(cluster.BaseNode):
 
     # pylint: disable=too-many-arguments
     def __init__(self, name, parent_cluster: 'PhysicalMachineCluster',
-                 public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
+                 public_ip, private_ip, credentials, base_logdir=None, node_prefix=None, shard_num=None):
         ssh_login_info = {'hostname': None,
                           'user': getattr(parent_cluster, "ssh_username", credentials.name),
                           'key_file': credentials.key_file}
@@ -47,7 +47,8 @@ class PhysicalMachineNode(cluster.BaseNode):
                          parent_cluster=parent_cluster,
                          base_logdir=base_logdir,
                          ssh_login_info=ssh_login_info,
-                         node_prefix=node_prefix)
+                         node_prefix=node_prefix,
+                         shard_num=shard_num)
 
     def init(self):
         super().init()
@@ -110,21 +111,22 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError('Physical hosts IPs are not configured!')
-        super().__init__(**kwargs)
+        super().__init__(nodes_smp=kwargs.pop('nodes_smp') or [], **kwargs)
 
     @property
     def ssh_username(self) -> str:
         # pylint: disable=no-member
         return self._ssh_username
 
-    def _create_node(self, name, public_ip, private_ip):
+    def _create_node(self, name, public_ip, private_ip, shard_num):
         node = PhysicalMachineNode(name,
                                    parent_cluster=self,
                                    public_ip=public_ip,
                                    private_ip=private_ip,
                                    credentials=self.credentials[0],
                                    base_logdir=self.logdir,
-                                   node_prefix=self.node_prefix)
+                                   node_prefix=self.node_prefix,
+                                   shard_num=shard_num)
         node.init()
         return node
 
@@ -135,7 +137,8 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
             node_name = '%s-%s' % (self.node_prefix, node_index)
             self.nodes.append(self._create_node(node_name,
                                                 self._node_public_ips[node_index],
-                                                self._node_private_ips[node_index]))
+                                                self._node_private_ips[node_index],
+                                                self.get_node_shard_num(node_index)))
 
 
 class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
