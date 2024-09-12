@@ -1,0 +1,32 @@
+test_duration: 680
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=6250 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..6250"]
+#                    "cassandra-stress write no-warmup cl=ALL n=6250 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=6251..12500",
+#                    "cassandra-stress write no-warmup cl=ALL n=6250 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=12501..18750",
+#                    "cassandra-stress write no-warmup cl=ALL n=6250 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=18751..25000"]
+
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=600m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=50 throttle=5000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..6250,3125,3125)' "
+stress_cmd_no_mv: "cassandra-stress user profile=/tmp/cs_mv_basic_profile_by_firstname_id.yaml ops'(insert=1)' cl=QUORUM duration=15m -pop seq=20000000..30000000 -mode cql3 native -rate threads=100"
+stress_cmd_mv: "cassandra-stress user profile=/tmp/cs_mv_basic_profile_by_firstname_id.yaml ops'(insert=1)' cl=QUORUM duration=15m -pop seq=20000000..30000000 -mode cql3 native -rate threads=100"
+
+
+n_db_nodes: 3
+n_loaders: 4
+n_monitor_nodes: 1
+
+instance_type_loader: 'c5.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i3.2xlarge'
+
+user_prefix: 'perf-latency-mv-overloaded'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+use_prepared_loaders: true
+use_hdr_cs_histogram: true
+custom_es_index: 'mv-overloading-latency-mixed'

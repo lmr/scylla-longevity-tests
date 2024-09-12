@@ -891,3 +891,55 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
     def test_latency_mixed_with_upgrade(self):
         self._prepare_latency_with_upgrade()
         self.run_workload_and_upgrade(stress_cmd=self.params.get('stress_cmd_m'))
+
+
+
+
+class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest):
+
+    def test_mixed_mv_latency(self):
+        # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
+        self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
+        self.tester = self  # pylint: disable=attribute-defined-outside-init
+        self.monitoring_set = self.monitors  # pylint: disable=attribute-defined-outside-init
+        
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data() #prepare_write_cmd
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+
+        self.create_test_stats(sub_type="mixed", append_sub_test_to_name=False, test_index="mv-overloading-latency-mixed")
+        self.run_stress_thread(stress_cmd=self.params.get('stress_cmd_m'), stress_num=1,
+                                              stats_aggregate_cmds=False)
+
+        self.steady_state_mixed_workload_latency()  #stress_cmd_m
+        self.do_rewrite_workload() #stress_cmd_no_mv + #stress_cmd_m
+        self.wait_mv_cync() #stress_cmd_m
+        self.do_rewrite_workload_with_mv() #stress_cmd_mv + #stress_cmd_m
+        self.loaders.kill_stress_thread()
+        self.check_latency_during_ops()
+
+
+    @latency_calculator_decorator
+    def steady_state_mixed_workload_latency(self):
+        InfoEvent(message='start_mixed_workload_latency begin').publish()
+        time.sleep(15*60)
+        InfoEvent(message='start_mixed_workload_latency ended').publish()
+
+    @latency_calculator_decorator
+    def do_rewrite_workload(self):
+        base_cmd = self.params.get('stress_cmd_no_mv')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue)
+        self.display_results(results, test_name='do_rewrite_workload')
+
+    @latency_calculator_decorator
+    def wait_mv_cync(self):
+        time.sleep(15*60)
+
+    @latency_calculator_decorator
+    def do_rewrite_workload_with_mv(self):
+        base_cmd = self.params.get('stress_cmd_mv')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue)
+        self.display_results(results, test_name='do_rewrite_workload_with_mv')
