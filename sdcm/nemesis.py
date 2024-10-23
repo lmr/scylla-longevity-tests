@@ -38,8 +38,9 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from types import MethodType  # pylint: disable=no-name-in-module
 
-from cassandra import ConsistencyLevel, InvalidRequest
+from cassandra import ConsistencyLevel, InvalidRequest, Unavailable
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.cluster import NoHostAvailable, OperationTimedOut  # pylint: disable=no-name-in-module
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.backend.util.enums import NemesisStatus
@@ -124,6 +125,7 @@ from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE
 from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
     wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_column_names, \
     wait_for_view_to_be_built, drop_materialized_view, is_cf_a_view
+from sdcm.utils.nemesis_utils import node_operations
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
@@ -152,12 +154,15 @@ from sdcm.exceptions import (
     AuditLogTestFailure,
     BootstrapStreamErrorFailure,
     QuotaConfigurationFailure,
+    BannedQueryExecUnexpectedSuccess,
 )
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
+from sdcm.utils.tablets.common import TabletsConfiguration
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
+
 
 LOGGER = logging.getLogger(__name__)
 # NOTE: following lock is needed in the K8S multitenant case
@@ -3537,9 +3542,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         node_to_remove = self.target_node
         up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
-        # node_to_remove must be different than node
-        verification_node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
 
+        with Nemesis.run_nemesis(node_list=up_normal_nodes, nemesis_label="RemoveNodeAddNode") as verification_node:
+            self._remove_node_add_node(verification_node=verification_node, node_to_remove=node_to_remove)
+
+    def _remove_node_add_node(self, verification_node, node_to_remove, remove_node_host_id=None):
+        # node_to_remove must be different than node
         # node_to_remove is single/last seed in cluster, before
         # it will be terminated, choose new seed node
         num_of_seed_nodes = len(self.cluster.seed_nodes)
@@ -3549,14 +3557,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.cluster.update_seed_provider()
 
         # get node's host_id
-        removed_node_status = self.cluster.get_node_status_dictionary(
-            ip_address=node_to_remove.ip_address, verification_node=verification_node)
-        assert removed_node_status is not None, "failed to get host_id using nodetool status"
-        host_id = removed_node_status["host_id"]
+        if not remove_node_host_id:
+            removed_node_status = self.cluster.get_node_status_dictionary(
+                ip_address=node_to_remove.ip_address, verification_node=verification_node)
+            assert removed_node_status is not None, "failed to get host_id using nodetool status"
+            host_id = removed_node_status["host_id"]
+        else:
+            host_id = remove_node_host_id
 
         with ignore_ycsb_connection_refused():
             # node stop and make sure its "DN"
-            node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
+            node_to_remove.stop_scylla_server(verify_up=False, verify_down=True)
 
             # terminate node
             self._terminate_cluster_node(node_to_remove)
@@ -3564,19 +3575,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         @retrying(n=3, sleep_time=5, message="Removing node from cluster...")
         def remove_node():
             removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
-            # nodetool removenode 'host_id'
-            rnd_node = random.choice([n for n in self.cluster.nodes if n is not self.target_node])
-            self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
-                          .format(rnd_node.ip_address, host_id))
-            with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
-                res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
-            if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
-                raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
+            with Nemesis.run_nemesis(node_list=self.cluster.nodes, nemesis_label="RemoveNodeAddNode") as rnd_node:
+                self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
+                              .format(rnd_node.ip_address, host_id))
+                with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
+                    res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
+                if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
+                    raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
 
             return res.exit_status
 
         # full cluster repair
-        up_normal_nodes.remove(node_to_remove)
+        up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node)
         # Repairing will result in a best effort repair due to the terminated node,
         # and as a result requires ignoring repair errors
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
@@ -3591,50 +3601,52 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # WORKAROUND: adding here the continuation of the nemesis to avoid the late filter messages above failing
             # the entire nemesis.
 
-            exit_status = remove_node()
-
-            # if remove node command failed by any reason,
-            # we will remove the terminated node from
-            # dead_nodes_list, so the health validator terminate the job
-            if exit_status != 0:
-                self.log.error(f"nodetool removenode command exited with status {exit_status}")
-                # check difference between group0 and token ring,
-                garbage_host_ids = verification_node.raft.get_diff_group0_token_ring_members()
-                self.log.debug("Difference between token ring and group0 is %s", garbage_host_ids)
-                if garbage_host_ids:
-                    # if difference found, clean garbage and continue
-                    verification_node.raft.clean_group0_garbage()
+        exit_status = remove_node()
+        # if remove node command failed by any reason,
+        # we will remove the terminated node from
+        # dead_nodes_list, so the health validator terminate the job
+        if exit_status != 0:
+            self.log.error(f"nodetool removenode command exited with status {exit_status}")
+            # check difference between group0 and token ring,
+            garbage_host_ids = verification_node.raft.get_diff_group0_token_ring_members()
+            self.log.debug("Difference between token ring and group0 is %s", garbage_host_ids)
+            if garbage_host_ids:
+                # if difference found, clean garbage and continue
+                verification_node.raft.clean_group0_garbage()
+            else:
+                # group0 and token ring are consistent. Removenode failed by meanigfull reason.
+                # remove node from dead_nodes list to raise critical issue by HealthValidator
+                self.log.debug(
+                    f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
+                node = next((n for n in self.cluster.dead_nodes_list if n.ip_address ==
+                            node_to_remove.ip_address), None)
+                if node:
+                    self.cluster.dead_nodes_list.remove(node)
                 else:
-                    # group0 and token ring are consistent. Removenode failed by meanigfull reason.
-                    # remove node from dead_nodes list to raise critical issue by HealthValidator
-                    self.log.debug(
-                        f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
-                    node = next((n for n in self.cluster.dead_nodes_list if n.ip_address ==
-                                node_to_remove.ip_address), None)
-                    if node:
-                        self.cluster.dead_nodes_list.remove(node)
-                    else:
-                        self.log.debug(f"Node {node.name} with ip {node.ip_address} was not found in dead_nodes_list")
-
+                    self.log.debug(f"Node {node.name} with ip {node.ip_address} was not found in dead_nodes_list")
             # verify node is removed by nodetool status
-            removed_node_status = self.cluster.get_node_status_dictionary(
-                ip_address=node_to_remove.ip_address, verification_node=verification_node)
-            assert removed_node_status is None, \
-                "Node was not removed properly (Node status:{})".format(removed_node_status)
+        removed_node_status = self.cluster.get_node_status_dictionary(
+            ip_address=node_to_remove.ip_address, verification_node=verification_node)
+        assert removed_node_status is None, \
+            "Node was not removed properly (Node status:{})".format(removed_node_status)
 
-            # add new node
-            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
-            # in case the removed node was not last seed.
-            if node_to_remove.is_seed and num_of_seed_nodes > 1:
-                new_node.set_seed_flag(True)
-                self.cluster.update_seed_provider()
-            # after add_node, the left nodes have data that isn't part of their tokens anymore.
-            # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
-            # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-            try:
-                self.nodetool_cleanup_on_all_nodes_parallel()
-            finally:
-                self.unset_current_running_nemesis(new_node)
+        # add new node
+        new_node = self._add_and_init_new_cluster_nodes(count=1, rack=node_to_remove.rack)[0]
+        # in case the removed node was not last seed.
+        if node_to_remove.is_seed and num_of_seed_nodes > 1:
+            new_node.set_seed_flag(True)
+            self.cluster.update_seed_provider()
+        # after add_node, the left nodes have data that isn't part of their tokens anymore.
+        # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+        # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+        try:
+            test_keyspaces = self.cluster.get_test_keyspaces()
+            for node in self.cluster.nodes:
+                with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
+                    for keyspace in test_keyspaces:
+                        node.run_nodetool(sub_cmd='cleanup', args=keyspace, retry=0)
+        finally:
+            self.unset_current_running_nemesis(new_node)
 
     def disrupt_network_reject_inter_node_communication(self):
         """
@@ -5151,6 +5163,95 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.restart_scylla_server()
             raise
 
+    def disrupt_refuse_connection_with_block_scylla_ports_on_banned_node(self):
+        self._refuse_connection_from_banned_node(use_iptables=True)
+
+    def disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node(self):
+        self._refuse_connection_from_banned_node(use_iptables=False)
+
+    def _refuse_connection_from_banned_node(self, use_iptables=False):
+        """Banned node could not connect with rest nodes in cluster
+
+        If node was removed from cluster for any reason, even if removed node
+        become alive and try to communicate with rest node in cluster, all connections
+        from it should be refused by other nodes in cluster
+        1. on target node block any scylladb process
+        1.1 Pause process
+        1.2 Block with iptables port 9100/10000
+        2. Wait and remove target node from cluster
+        3. start scylla on target node
+        4. Create exclusive connection to target node
+        5. Execute cql command on target node and validate that no operation
+        from target node passed to cluster
+        """
+        if not self.target_node.raft.is_consistent_topology_changes_enabled:
+            raise UnsupportedNemesis("Raft feature: consistent-topology-changes is not enabled")
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Skip test for K8S because no supported yet")
+        keyspace_name = "banned_keyspace"
+        table_name = "table1"
+
+        def prepare_test_keyspace(node):
+            """ Create new table for verification missing data
+
+            Create new keyspace and table which allow to
+            verify that no operations come from banned node
+            """
+
+            with self.cluster.cql_connection_exclusive(node=node) as session:
+                tablets_config = TabletsConfiguration(
+                    enabled=True) if is_tablets_feature_enabled(session=session) else None
+
+            self.tester.create_keyspace(keyspace_name, replication_factor=3, tablets_config=tablets_config)
+            self.tester.create_table(name=table_name, keyspace_name=keyspace_name, key_type="bigint",
+                                     columns={"name": "text"})
+
+        simulate_node_unavailability = node_operations.block_scylla_ports if use_iptables else node_operations.stop_scylla_with_sigstop
+        with self.run_nemesis(node_list=self.cluster.nodes,
+                              nemesis_label=f"Running {simulate_node_unavailability.__name__}") as working_node, ExitStack() as stack:
+            target_host_id = self.target_node.host_id
+
+            stack.callback(self._remove_node_add_node, verification_node=working_node, node_to_remove=self.target_node,
+                           remove_node_host_id=target_host_id)
+
+            prepare_test_keyspace(self.target_node)
+            with simulate_node_unavailability(self.target_node):
+                # target node stopped by Contextmanger. Wait while its status will be updated
+                wait_for(node_operations.is_node_seen_as_down, timeout=600, throw_exc=True,
+                         down_node=self.target_node, verification_node=working_node, text=f"Wait other nodes see {self.target_node.name} as DOWN...")
+                self.log.debug("Remove node %s : hostid: %s with blocked scylla from cluster",
+                               self.target_node.name, target_host_id)
+                working_node.run_nodetool(f"removenode {target_host_id}", retry=3)
+                self.log.debug("Wait while all node update topology status")
+                wait_for(node_operations.is_node_removed_from_cluster, timeout=300, throw_exc=True,
+                         removed_node=self.target_node, verification_node=working_node, text=f"Waite other nodes mark node {self.target_node.name} as REMOVED...")
+                # Run read barrier on working node to validate that it update raft topology state
+                working_node.raft.call_read_barrier()
+
+                # Context manager at exit  start scylla on target node.
+                # But node already removed from cluster. So any operations from it
+                # should be banned. If query executed succesfull, raise an error
+            assert self.target_node.db_up(), f"Scylla was not up on node {self.target_node.name}"
+
+            with self.cluster.cql_connection_exclusive(node=self.target_node) as session:
+                try:
+                    stmt = SimpleStatement(f"INSERT INTO {keyspace_name}.{table_name} (key, name) VALUES (1, 'name1');",
+                                           consistency_level=ConsistencyLevel.QUORUM)
+                    session.execute(stmt)
+                    self.log.error("Banned query passed to cluster from banned node")
+                    raise BannedQueryExecUnexpectedSuccess(
+                        "Query from banned node was executed succesful with Consistency.ALL")
+                except (NoHostAvailable, OperationTimedOut, Unavailable) as exc:
+                    self.log.debug("Query failed with error: %s as expected", exc)
+
+            with self.cluster.cql_connection_patient(working_node) as session:
+                LOGGER.debug("Check keyspace %s.%s is empty", keyspace_name, table_name)
+                result = list(session.execute(f"SELECT * from {keyspace_name}.{table_name}"))
+                LOGGER.debug("Query result %s", result)
+                assert not result, f"New rows were added from banned node, {result}"
+                LOGGER.debug("Drop keyspace %s", keyspace_name)
+                session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_name}", timeout=300)
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
     """
@@ -6664,3 +6765,21 @@ class EndOfQuotaNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_end_of_quota_nemesis()
+
+
+class IsolateNodeWithProcessSignalNemesis(Nemesis):
+    disruptive = True
+    topology_changes = True
+    kubernetes = False
+
+    def disrupt(self):
+        self.disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node()
+
+
+class IsolateNodeWithIptableRuleNemesis(Nemesis):
+    disruptive = True
+    topology_changes = True
+    kubernetes = False
+
+    def disrupt(self):
+        self.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()

@@ -83,3 +83,7 @@ class SstablesNotFound(Exception):
 
 class CapacityReservationError(Exception):
     pass
+
+
+class BannedQueryExecUnexpectedSuccess(Exception):
+    """Exception when query executed successfully on banned node"""

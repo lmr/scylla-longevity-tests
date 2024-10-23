@@ -218,7 +218,11 @@ class TestSisyphusMonkeyNemesisFilter:
             "disrupt_terminate_and_replace_node",
             "disrupt_decommission_streaming_err",
             "disrupt_remove_node_then_add_node",
-            "disrupt_bootstrap_streaming_error"]
+            "disrupt_bootstrap_streaming_error",
+            "disrupt_refuse_connection_with_block_scylla_ports_on_banned_node",
+            "disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node"
+
+        ]
 
     @pytest.fixture(autouse=True)
     def expected_schema_changes_methods(self):

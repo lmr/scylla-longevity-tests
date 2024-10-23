@@ -29,6 +29,8 @@
 - EnospcMonkey
 - GrowShrinkClusterNemesis
 - HardRebootNodeMonkey
+- IsolateNodeWithIptableRuleNemesis
+- IsolateNodeWithProcessSignalNemesis
 - LoadAndStreamMonkey
 - MajorCompactionMonkey
 - MemoryStressMonkey

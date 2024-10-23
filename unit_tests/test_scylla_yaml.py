@@ -255,6 +255,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'file_cache_size_in_mb': None,
                 'force_gossip_generation': None,
                 'force_schema_commit_log': True,
+                'force_gossip_topology_changes': None,
                 'hinted_handoff_enabled': None,
                 'hinted_handoff_throttle_in_kb': None,
                 'hints_directory': None,

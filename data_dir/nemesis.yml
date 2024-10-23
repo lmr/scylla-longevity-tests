@@ -215,6 +215,14 @@
   - topology_changes = True
 - disrupt_rebuild_streaming_err:
   - disruptive = True
+- disrupt_refuse_connection_with_block_scylla_ports_on_banned_node:
+  - disruptive = True
+  - topology_changes = True
+  - kubernetes = False
+- disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node:
+  - disruptive = True
+  - topology_changes = True
+  - kubernetes = False
 - disrupt_remove_node_then_add_node:
   - disruptive = True
   - kubernetes = False
