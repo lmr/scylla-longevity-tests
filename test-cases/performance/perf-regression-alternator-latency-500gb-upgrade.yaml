@@ -1,0 +1,54 @@
+test_duration: 3000
+
+prepare_write_cmd:
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 100 -p recordcount=125000000 -p fieldcount=10 -p fieldlength=512
+    -p insertorder=hashed -p insertstart=0 -p insertcount=41666666 -p operationcount=500000000
+
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 100 -p recordcount=125000000 -p fieldcount=10 -p fieldlength=512
+    -p insertorder=hashed -p insertstart=41666666 -p insertcount=41666666 -p operationcount=500000000
+
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 100 -p recordcount=125000000 -p fieldcount=10 -p fieldlength=512
+    -p insertorder=hashed -p insertstart=83333332 -p insertcount=41666666 -p operationcount=500000000
+
+
+stress_cmd_w: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -p recordcount=125000000
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=36000 -p operationcount=1000000000
+
+stress_cmd_r: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -target 10000 -p recordcount=125000000
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=36000 -p operationcount=1000000000
+
+stress_cmd_m: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run dynamodb -P workloads/workloada -threads 100 -p recordcount=125000000
+  -p readproportion=0.5 -p updateproportion=0.5 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p maxexecutiontime=36000 -p operationcount=1000000000
+
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_loader: 'c5.9xlarge'
+instance_type_db: 'i3en.2xlarge'
+
+alternator_write_isolation: 'forbid'
+alternator_port: 8080
+dynamodb_primarykey_type: HASH_AND_RANGE
+
+user_prefix: 'perf-alternator-latency-upgrade'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+email_recipients: ["evgeniy.naydanov@scylladb.com"]

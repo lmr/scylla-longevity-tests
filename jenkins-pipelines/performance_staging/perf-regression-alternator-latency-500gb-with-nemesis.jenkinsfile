@@ -1,0 +1,12 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfRegressionParallelPipeline(
+    backend: "aws",
+    test_name: "performance_regression_alternator_test.PerformanceRegressionAlternatorTest",
+    test_config: """["test-cases/performance/perf-regression-alternator-latency-500gb-with-nemesis.yaml"]""",
+    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
+    test_email_title: "alternator latency during operations"
+)
