@@ -152,6 +152,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         ec2.add_placement_group_name_param(params, self.placement_group_name)
         if self.params.get('use_capacity_reservation'):
             ec2.add_capacity_reservation_param(params, region_name_with_az[-1])
+        if self.params.get('use_dedicated_host'):
+            ec2.add_host_id_param(params, region_name_with_az[-1])
         LOGGER.debug('Sending an On-Demand request with params: %s', params)
         LOGGER.debug('Using EC2 service with DC-index: %s, (associated with region: %s)',
                      dc_idx, self.region_names[dc_idx])

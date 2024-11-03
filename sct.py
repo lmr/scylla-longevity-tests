@@ -322,6 +322,8 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
     else:
         os.environ['SCT_CLUSTER_BACKEND'] = backend
 
+    if test_id:
+        os.environ['SCT_TEST_ID'] = test_id[0]
     config = SCTConfiguration()
     if post_behavior:
         click.echo(f"Use {logdir} as a logdir")
