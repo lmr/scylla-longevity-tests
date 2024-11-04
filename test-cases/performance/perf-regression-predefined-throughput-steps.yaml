@@ -43,7 +43,7 @@ n_monitor_nodes: 1
 instance_type_db: 'i4i.4xlarge'
 instance_type_loader: 'c7i.8xlarge'
 instance_type_monitor: 't3.small'
-use_capacity_reservation: true
+use_capacity_reservation: false
 
 use_preinstalled_scylla: true
 
@@ -63,7 +63,8 @@ append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --
 append_scylla_yaml:
   auto_snapshot: false
 
-use_placement_group: true
+use_placement_group: false
+use_dedicated_host: true
 use_prepared_loaders: false
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.13.0'

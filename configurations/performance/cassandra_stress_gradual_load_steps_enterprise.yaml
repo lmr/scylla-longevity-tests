@@ -1,3 +1,3 @@
 # Define load ops for steps
 perf_gradual_threads: {"read": 620, "write": 400, "mixed": 1900}
-perf_gradual_throttle_steps: {"read": ['150000', '300000', '450000', '600000', '700000', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['200000', '300000', '400000', 'unthrottled']}  # where every value is in ops
+perf_gradual_throttle_steps: {"read": ['150000', '300000', '450000', '600000', '700000', 'unthrottled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrottled'], "write": ['unthrottled', 'unthrottled', 'unthrottled']}  # where every value is in ops
