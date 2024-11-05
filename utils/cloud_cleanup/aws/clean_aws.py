@@ -315,6 +315,63 @@ def clean_ips(region_name):
     print("region %s deleted %d ip addresses kept %s" % (region_name, deleted_addresses, kept_addresses))
 
 
+def print_dedicate_host(host: dict, msg: str):
+    print("dedicate host %s %s" % (host.get('HostId'), msg))
+
+
+def keep_alive_host(host: dict):
+    if datetime.datetime.now(tz=pytz.utc) - host.get('AllocationTime') < datetime.timedelta(hours=1):
+        # skipping if created recently and might miss tags yet
+        return True
+    # checking tags
+    if host.get('Tags') is None:
+        return False
+    for tag in host.get('Tags'):
+        if tag['Key'] == 'keep' and tag['Value'] == 'alive':
+            return True
+    return False
+
+
+def clean_dedicate_hosts(region_name):
+    print("cleaning region %s dedicate_hosts" % region_name)
+    ec2 = boto3.client('ec2', region_name=region_name)
+
+    def delete_host(_host: dict):
+        try:
+            print_dedicate_host(_host, "deleting")
+            if not DRY_RUN:
+                ec2.release_hosts(HostIds=[_host.get['HostId'], ])
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            pass
+
+    count_kept_hosts = 0
+    count_deleted_hosts = 0
+    response = ec2.describe_hosts(Filters=[
+        {
+            'Name': 'state',
+            'Values': ['available']
+        }
+    ]
+    )
+
+    for host in response['Hosts']:
+        debug("checking host %s %s %s" %
+              (host.get('HostId'), host.get('Instances'), host.get('AllocationTime')))
+        keep_alive = keep_alive_host(host)
+
+        if keep_alive or host.get('Instances'):
+            count_kept_hosts += 1
+            if VERBOSE:
+                print_dedicate_host(host, "kept")
+        else:
+            count_deleted_hosts += + 1
+            delete_host(host)
+            if VERBOSE:
+                print_dedicate_host(host, "deleted")
+
+    print("region %s deleted %d kept %d" % (region_name, count_deleted_hosts, count_kept_hosts))
+
+
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser('ec2_stop')
     arg_parser.add_argument("--duration", type=int,
@@ -355,3 +412,4 @@ if __name__ == "__main__":
         clean_instances(region, arguments.duration)
         clean_volumes(region)
         clean_ips(region)
+        clean_dedicate_hosts(region)
