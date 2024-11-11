@@ -27,10 +27,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class SCTDedicatedHosts:
-    hosts: Dict[str, Dict[str, list[str]]] = {}
+    hosts: Dict[str, Dict[str, str]] = {}
 
     @classmethod
-    def get_host(cls, availability_zone, instance_type: str) -> list:
+    def get_host(cls, availability_zone, instance_type: str) -> str:
         """Returns dedicated host id for given instance type for provided az."""
         return cls.hosts.get(availability_zone, {}).get(instance_type)
 
@@ -82,8 +82,7 @@ class SCTDedicatedHosts:
         if response['Hosts']:
             host = response['Hosts'][0]
             instance_type = host.get('HostProperties').get('InstanceType')
-            cls.hosts[host.get('AvailabilityZone')] = {instance_type: [
-                host.get('HostId') for host in response['Hosts']]}
+            cls.hosts[host.get('AvailabilityZone')] = {instance_type: host.get('HostId')}
             return
         else:
             tags = TestConfig.common_tags()
@@ -91,13 +90,13 @@ class SCTDedicatedHosts:
                 tags['keep'] = 'alive'
             tags['test_id'] = test_id
             region = params.region_names[0]
-            host_ids = cls.allocate(region_name=region, availability_zone=region+params.get("availability_zone"),
-                                    instance_type=params.get('instance_type_db'), quantity=params.get('n_db_nodes'), tags=tags)
+            host_id = cls.allocate(region_name=region, availability_zone=region+params.get("availability_zone"),
+                                   instance_type=params.get('instance_type_db'), quantity=1, tags=tags)
 
-            cls.hosts[region+params.get("availability_zone")] = {params.get('instance_type_db'): host_ids}
+            cls.hosts[region+params.get("availability_zone")] = {params.get('instance_type_db'): host_id}
 
     @staticmethod
-    def allocate(region_name: str, availability_zone: str, instance_type: str, quantity: int, tags: dict) -> list[str]:
+    def allocate(region_name: str, availability_zone: str, instance_type: str, quantity: int, tags: dict):
         ec2 = boto3.client('ec2', region_name=region_name)
         try:
             response = ec2.allocate_hosts(
@@ -112,10 +111,10 @@ class SCTDedicatedHosts:
                 ]
             )
             LOGGER.debug(response)
-            return response['HostIds']
+            return response['HostIds'][0]
         except Exception as e:  # noqa: BLE001
             print(f"Error allocating dedicated hosts: {e}")
-            raise
+            return None
 
     @classmethod
     def release(cls, params) -> None:
@@ -152,6 +151,6 @@ class SCTDedicatedHosts:
                 ) from None
 
         for host in hosts.values():
-            for instance_type, host_ids in host.items():
-                release_with_retry(host_ids)
-                LOGGER.info("dedicated host %s for %s cancelled successfully.", host_ids, instance_type)
+            for instance_type, host_id in host.items():
+                release_with_retry([host_id,])
+                LOGGER.info("dedicated host %s for %s cancelled successfully.", host_id, instance_type)
