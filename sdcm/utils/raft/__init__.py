@@ -405,6 +405,7 @@ class NoRaft(RaftFeatureOperations):
         LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", self._node.name, self._node.host_id)
 
 
+
 def get_raft_mode(node) -> RaftFeature | NoRaft:
     with node.parent_cluster.cql_connection_patient(node) as session:
         return RaftFeature(node) if is_consistent_cluster_management_feature_enabled(session) else NoRaft(node)

@@ -113,18 +113,30 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
                     'CapacityReservationId': cr_id
                 }
             }
-        if host_id := SCTDedicatedHosts.get_host(provision_parameters.region_name + provision_parameters.availability_zone,
-                                                 instance_parameters.InstanceType):
-            instance_parameters_dict['Placement'] = {
-                'HostId': host_id
-            }
-        LOGGER.info("[%s] Creating {count} on-demand instances using AMI id '%s' with following parameters:\n%s",
+        if host_ids := SCTDedicatedHosts.get_host(provision_parameters.region_name + provision_parameters.availability_zone,
+                                                  instance_parameters.InstanceType):
+            instances = []
+            for host_id in host_ids:
+                instance_parameters_dict['Placement'] = {
+                    'HostId': host_id
+                }
+                LOGGER.info(
+                    f"[%s] Creating 1 on-demand instances using AMI id '%s' with following parameters:\n%s",
                     provision_parameters.region_name,
                     instance_parameters.ImageId,
                     instance_parameters_dict
-                    )
-        instances = ec2_services[provision_parameters.region_name].create_instances(
-            **instance_parameters_dict, MinCount=count, MaxCount=count)
+                )
+                instances += ec2_services[provision_parameters.region_name].create_instances(
+                    **instance_parameters_dict, MinCount=1, MaxCount=1)
+        else:
+            LOGGER.info(f"[%s] Creating {count} on-demand instances using AMI id '%s' with following parameters:\n%s",
+                        provision_parameters.region_name,
+                        instance_parameters.ImageId,
+                        instance_parameters_dict
+                        )
+            instances = ec2_services[provision_parameters.region_name].create_instances(
+                **instance_parameters_dict, MinCount=count, MaxCount=count)
+
         LOGGER.info("Created instances: %s.", instances)
         if instances:
             for ind, instance in enumerate(instances):
