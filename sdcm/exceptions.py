@@ -91,3 +91,8 @@ class RaftTopologyCoordinatorNotFound(Exception):
 
 class NemesisStressFailure(Exception):
     """Exception to be raised to stop Nemesis flow, if stress command failed"""
+
+
+class ReadBarrierErrorException(Exception):
+    """Raise exception if read barrier call failed"""
+    pass

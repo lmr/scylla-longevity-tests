@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: '''["eu-west-1", "eu-west-2", "eu-north-1"]''',
+    test_name: 'add_new_dc_test.TestAddNewDc.test_add_new_dc_with_zero_nodes',
+    test_config: 'test-cases/features/add-new-dc-with-zero-nodes.yaml',
+
+    timeout: [time: 120, unit: 'MINUTES']
+)
