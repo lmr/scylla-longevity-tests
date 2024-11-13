@@ -97,3 +97,20 @@ def test_release_retries_fails(mock_ec2, params):
         SCTDedicatedHosts.release(params)
     mock_ec2.release_hosts.assert_called_with(HostIds=['h-0867aada366f84ff1'])
     assert mock_ec2.release_hosts.call_count == 10
+
+
+def test_release_by_tag_unit_unit(mock_ec2):
+    mock_ec2.release_hosts.side_effect = [
+        {'Unsuccessful': [{'Error': {'Code': '000', 'Message': 'error'}}]}, {'Successful': ['h-0867aada366f84ff1']}]
+    mock_ec2.describe_hosts.side_effect = [
+        {'Hosts': [{'HostId': 'h-0af5175ea085157f0'}]}]
+
+    SCTDedicatedHosts.release_by_tags({"TestId": "no-existing"}, regions=['us-east-1'], dry_run=False)
+
+    mock_ec2.release_hosts.assert_called_with(HostIds=['h-0af5175ea085157f0'])
+    assert mock_ec2.release_hosts.call_count == 2
+
+
+@pytest.mark.integration
+def test_release_by_tag_integration():
+    SCTDedicatedHosts.release_by_tags({"TestId": "no-existing"}, regions=['us-east-1', 'eu-west-1'], dry_run=True)

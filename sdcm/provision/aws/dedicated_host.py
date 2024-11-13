@@ -12,14 +12,19 @@
 # Copyright (c) 2024 ScyllaDB
 
 import logging
+import time
+import random
+import itertools
 from typing import Dict
 
 import boto3
 from botocore.exceptions import ClientError
 import tenacity
 
+
 from sdcm.wait import exponential_retry
 from sdcm.utils.aws_utils import tags_as_ec2_tags
+from sdcm.utils.common import ParallelObject, all_aws_regions
 from sdcm.test_config import TestConfig
 
 
@@ -69,7 +74,7 @@ class SCTDedicatedHosts:
         else:
             response = ec2.describe_hosts(Filters=[
                 {
-                    'Name': 'tag:test_id',
+                    'Name': 'tag:TestId',
                     'Values': [test_id]
                 },
                 {
@@ -88,7 +93,7 @@ class SCTDedicatedHosts:
             tags = TestConfig.common_tags()
             if TestConfig.should_keep_alive('dedicated_host'):
                 tags['keep'] = 'alive'
-            tags['test_id'] = test_id
+            tags['TestId'] = test_id
             region = params.region_names[0]
             host_id = cls.allocate(region_name=region, availability_zone=region+params.get("availability_zone"),
                                    instance_type=params.get('instance_type_db'), quantity=1, tags=tags)
@@ -128,6 +133,62 @@ class SCTDedicatedHosts:
         ec2 = boto3.client('ec2', region_name=params.region_names[0])
         cls._release_hosts(ec2, cls.hosts)
         cls.reservations = {}
+
+    @staticmethod
+    def list_hosts(tags_dict: dict, region_name: str | None = None, group_as_region: bool = True, verbose: bool = False) -> list:
+        hosts = {}
+        aws_regions = [region_name] if region_name else all_aws_regions()
+
+        def get_host(region):
+            if verbose:
+                LOGGER.info('Going to list aws region "%s"', region)
+            time.sleep(random.random())
+            client = boto3.client('ec2', region_name=region)
+            custom_filter = []
+            if tags_dict:
+                custom_filter = [{'Name': 'tag:{}'.format(key),
+                                  'Values': value if isinstance(value, list) else [value]}
+                                 for key, value in tags_dict.items()]
+            response = client.describe_hosts(Filters=custom_filter)
+            hosts[region] = response.get('Hosts', [])
+
+            if verbose:
+                LOGGER.info("%s: done [%s/%s]", region, len(list(hosts.keys())), len(aws_regions))
+
+        ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_host, ignore_exceptions=False)
+
+        if not group_as_region:
+            hosts = list(itertools.chain(*list(hosts.values())))  # flatten the list of lists
+            total_items = len(hosts)
+        else:
+            total_items = sum([len(value) for _, value in hosts.items()])
+
+        if verbose:
+            LOGGER.info("Found total of {} instances.".format(total_items))
+
+        return hosts
+
+    @classmethod
+    def release_by_tags(cls, tags_dict: dict, regions=None, dry_run=False) -> None:
+        """Cancel all dedicated hosts with specific tags in AWS."""
+
+        assert tags_dict, "tags_dict not provided (can't clean all hosts)"
+        if regions:
+            aws_hosts = {}
+            for region in regions:
+                aws_hosts |= cls.list_hosts(
+                    tags_dict=tags_dict, region_name=region, group_as_region=True)
+        else:
+            aws_hosts = cls.list_hosts(tags_dict=tags_dict, group_as_region=True)
+
+        for region, hosts_list in aws_hosts.items():
+            if not hosts_list:
+                LOGGER.info("There are no hosts to release in AWS region %s", region)
+                continue
+            client = boto3.client('ec2', region_name=region)
+            for host in hosts_list:
+                if not dry_run:
+                    cls._release_hosts(ec2=client, hosts={region: {'instance_type': str(host['HostId'])}})
 
     @staticmethod
     def _release_hosts(ec2, hosts: Dict[str, Dict[str, str]]) -> None:
