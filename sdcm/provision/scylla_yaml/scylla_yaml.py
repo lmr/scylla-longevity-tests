@@ -285,6 +285,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     large_memory_allocation_warning_threshold: int = None  # 2 ** 20
     enable_deprecated_partitioners: bool = None  # False
     enable_keyspace_column_family_metrics: bool = None  # False
+    enable_node_aggregated_table_metrics: bool = None  # True
     enable_sstable_data_integrity_check: bool = None  # False
     enable_sstable_key_validation: bool = None  # None
     cpu_scheduler: bool = None  # True

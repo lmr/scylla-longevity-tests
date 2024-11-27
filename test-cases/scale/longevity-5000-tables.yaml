@@ -1,6 +1,6 @@
-test_duration: 2160
+test_duration: 2520
 
-cs_duration: '55m'
+cs_duration: '20m'
 cs_user_profiles:
     - scylla-qa-internal/cust_d/templated_tables_mv.yaml
 
@@ -9,24 +9,33 @@ pre_create_schema: true
 user_profile_table_count: 5000
 batch_size: 100
 
-n_loaders: 5
+n_loaders: 3
 n_monitor_nodes: 1
 n_db_nodes: 1
 add_node_cnt: 5
 
-jmx_heap_memory: 1024 # this is a fix/workaround for https://github.com/scylladb/scylla/issues/7609
-
 instance_type_db: 'i4i.8xlarge'
+<<<<<<< HEAD
 instance_type_loader: 'c5.4xlarge'
 user_prefix: 'longevity-5000-tables'
+||||||| parent of 0c7fa60af (fix(test-case): update 5000 tables test case configuration)
+instance_type_loader: 'c6i.4xlarge'
+user_prefix: 'longevity-5000-tables'
+=======
+instance_type_loader: 'c6i.8xlarge'
+instance_type_monitor: 'm6i.xlarge'
+root_disk_size_monitor: 120
+>>>>>>> 0c7fa60af (fix(test-case): update 5000 tables test case configuration)
 root_disk_size_runner: 120
 
-
-cluster_health_check: false
+user_prefix: 'long-5000-tables'
+cluster_health_check: true
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '404'
-nemesis_interval: 60
+# NOTE: health checks will take some time, so, don't add significant waiting in this part
+nemesis_interval: 3
 
-# TODO: remove when https://github.com/scylladb/scylla-tools-java/issues/175 resolved
-stop_test_on_stress_failure: false
+append_scylla_yaml:
+  # NOTE: https://github.com/scylladb/scylla-monitoring/issues/2429
+  enable_node_aggregated_table_metrics: false
