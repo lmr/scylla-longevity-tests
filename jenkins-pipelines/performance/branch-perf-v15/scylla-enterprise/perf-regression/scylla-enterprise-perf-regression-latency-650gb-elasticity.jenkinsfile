@@ -7,7 +7,7 @@ perfRegressionParallelPipeline(
     backend: "aws",
     availability_zone: 'a',
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: """["test-cases/performance/perf-regression-latency-650gb-elasticity.yaml", "configurations/performance/cassandra-stress-650gb-8-col-i4i-80-percent-throughput-ent.yaml", "configurations/disable_kms.yaml"]""",
+    test_config: """["test-cases/performance/perf-regression-latency-650gb-elasticity.yaml", "configurations/performance/cassandra-stress-650gb-8-col-i4i-80-percent-throughput-ent.yaml", "configurations/disable_kms.yaml", "configurations/tablets_disabled.yaml"]""",
     sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
     perf_extra_jobs_to_compare: "scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-elasticity",
 )
