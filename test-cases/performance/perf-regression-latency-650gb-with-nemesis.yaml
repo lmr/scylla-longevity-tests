@@ -32,8 +32,9 @@ print_kernel_callstack: true
 
 store_perf_results: true
 email_recipients: ["scylla-perf-results@scylladb.com"]
-use_prepared_loaders: true
 use_hdr_cs_histogram: true
 use_placement_group: true
 use_capacity_reservation: true
 email_subject_postfix: 'latency during operations'
+stress_image:
+  cassandra-stress: 'scylladb/cassandra-stress:3.17.0'

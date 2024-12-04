@@ -32,8 +32,9 @@ print_kernel_callstack: true
 
 store_perf_results: true
 email_recipients: ["scylla-perf-results@scylladb.com"]
-use_prepared_loaders: true
 use_hdr_cs_histogram: true
 email_subject_postfix: 'elasticity test'
 nemesis_double_load_during_grow_shrink_duration: 30
 parallel_node_operations: true
+stress_image:
+  cassandra-stress: 'scylladb/cassandra-stress:3.17.0'
