@@ -1,0 +1,18 @@
+test_duration: 6000
+
+n_db_nodes: 3
+n_loaders: 4
+n_monitor_nodes: 1
+
+nodes_smp: [16, 16, 16, 12]
+
+instance_type_db: 'i3en.6xlarge'
+instance_type_loader: 'c6i.2xlarge'
+
+collect_logs: true
+backtrace_decoding: true
+
+hinted_handoff: 'disabled'
+
+append_scylla_yaml:
+  enable_tablets: false
