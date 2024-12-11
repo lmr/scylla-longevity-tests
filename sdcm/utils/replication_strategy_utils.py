@@ -44,7 +44,7 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
     def apply(self, node: 'BaseNode', keyspace: str):
         cql = f'ALTER KEYSPACE {cql_quote_if_needed(keyspace)} WITH replication = {self}'
         with node.parent_cluster.cql_connection_patient(node) as session:
-            session.execute(cql)
+            session.execute(cql, timeout=600)
 
     @property
     def replication_factors(self) -> list:  # pylint: disable=no-self-use

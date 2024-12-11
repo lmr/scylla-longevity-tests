@@ -1,0 +1,44 @@
+test_duration: 1800
+prepare_write_cmd: [
+  "cassandra-stress write no-warmup cl=ALL n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..100000000",
+  "cassandra-stress write no-warmup cl=ALL n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=100000001..200000000",
+  "cassandra-stress write no-warmup cl=ALL n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=200000001..300000000",
+  "cassandra-stress write no-warmup cl=ALL n=50000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=300000001..400000000",
+  ]
+
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=150 fixed=3300/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..200000000,100000000,2000000)' "
+
+
+n_db_nodes: 3
+nemesis_add_node_cnt: 3
+n_loaders: 4
+n_monitor_nodes: 1
+nemesis_grow_shrink_instance_type: 'i4i.4xlarge'
+
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i4i.large'
+
+nemesis_class_name: 'GrowClusterNemesis'
+nemesis_interval: 30
+nemesis_sequence_sleep_between_ops: 10
+
+user_prefix: 'elasticity-test'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+# email_recipients: ["scylla-perf-results@scylladb.com"]
+# use_prepared_loaders: true
+use_hdr_cs_histogram: true
+email_subject_postfix: 'elasticity test'
+nemesis_double_load_during_grow_shrink_duration: 0
+parallel_node_operations: true
+
+stress_image:
+  cassandra-stress: 'scylladb/cassandra-stress:3.17.0'

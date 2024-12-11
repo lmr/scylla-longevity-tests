@@ -1,0 +1,55 @@
+test_duration: 1800
+prepare_write_cmd: [
+  "cassandra-stress write no-warmup cl=ALL n=600000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..600000000",
+  "cassandra-stress write no-warmup cl=ALL n=600000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=600000001..1200000000",
+  "cassandra-stress write no-warmup cl=ALL n=600000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1200000001..1800000000",
+  "cassandra-stress write no-warmup cl=ALL n=600000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1800000001..2400000000",
+  "cassandra-stress write no-warmup cl=ALL n=600000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=2400000001..3000000000",
+  "cassandra-stress write no-warmup cl=ALL n=600000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=3000000001..3600000000",
+  "cassandra-stress write no-warmup cl=ALL n=600000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=3600000001..4200000000",
+  "cassandra-stress write no-warmup cl=ALL n=600000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=4200000001..4800000000",
+  "cassandra-stress write no-warmup cl=ALL n=500000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=4800000001..5400000000",
+  "cassandra-stress write no-warmup cl=ALL n=400000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=5400000001..6000000000",
+]
+
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=150 fixed=50000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..3000000000,1000000000,30000000)' "
+
+stress_cmd: [
+  "cassandra-stress write no-warmup cl=ALL n=330000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=6000000001..6600000000",
+  "cassandra-stress write no-warmup cl=ALL n=330000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=6600000001..7200000000",
+  "cassandra-stress write no-warmup cl=ALL n=330000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=7200000001..7800000000",
+]
+
+n_db_nodes: 3
+nemesis_add_node_cnt: 1
+n_loaders: 4
+n_monitor_nodes: 1
+nemesis_grow_shrink_instance_type: 'i4i.large'
+
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i4i.8xlarge'
+
+nemesis_class_name: 'GrowFillNemesis'
+nemesis_interval: 60
+nemesis_sequence_sleep_between_ops: 60
+
+user_prefix: 'elasticity-test'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+# email_recipients: ["scylla-perf-results@scylladb.com"]
+# use_prepared_loaders: true
+use_hdr_cs_histogram: true
+email_subject_postfix: 'elasticity test'
+nemesis_double_load_during_grow_shrink_duration: 0
+parallel_node_operations: true
+
+stress_image:
+  cassandra-stress: 'scylladb/cassandra-stress:3.17.0'

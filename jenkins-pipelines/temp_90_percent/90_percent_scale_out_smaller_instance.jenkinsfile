@@ -1,0 +1,19 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfRegressionParallelPipeline(
+    backend: "aws",
+    availability_zone: 'a',
+    test_name: "performance_regression_test.PerformanceRegressionTest",
+    test_config: """["test-cases/temp_90_percent/90-percent-perf-i4i-4xlarge-grow-i4i-large.yaml", "configurations/disable_kms.yaml"]""",
+    sub_tests: ["test_latency_mixed_with_nemesis"],
+    scylla_version: 'enterprise:latest',
+    email_recipients: 'cezar.moise@scylladb.com',
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'destroy',
+    post_behavior_k8s_cluster: 'destroy',
+    provision_type: 'on_demand',
+)

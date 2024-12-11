@@ -22,12 +22,18 @@
 - DrainKubernetesNodeThenDecommissionAndAddScyllaNode
 - DrainKubernetesNodeThenReplaceScyllaNode
 - DrainerMonkey
+- DropMonkey
+- DropPerfMonkey
 - EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey
 - EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey
 - EndOfQuotaNemesis
 - EnospcAllNodesMonkey
 - EnospcMonkey
+- GrowClusterNemesis
+- GrowFillNemesis
 - GrowShrinkClusterNemesis
+- GrowShrinkDatacenterNemesis
+- GrowShrinkZeroTokenNode
 - HardRebootNodeMonkey
 - LoadAndStreamMonkey
 - MajorCompactionMonkey
@@ -60,6 +66,7 @@
 - RestartThenRepairNodeMonkey
 - RollingRestartConfigChangeInternodeCompression
 - ScyllaKillMonkey
+- SerialRestartOfElectedTopologyCoordinatorNemesis
 - SlaDecreaseSharesDuringLoad
 - SlaIncreaseSharesByAttachAnotherSlDuringLoad
 - SlaIncreaseSharesDuringLoad
@@ -88,4 +95,5 @@
 - TopPartitions
 - TruncateLargeParititionMonkey
 - TruncateMonkey
+- TruncatePerfMonkey
 - ValidateHintedHandoffShortDowntime

@@ -65,7 +65,7 @@ class TestReplicationStrategies:
 class Cluster:  # pylint: disable=unused-argument,too-few-public-methods
     class Session:
         @staticmethod
-        def execute(cql):
+        def execute(cql, timeout=None):
             if 'some error' in cql:
                 raise AttributeError("found some error")
             print(cql)

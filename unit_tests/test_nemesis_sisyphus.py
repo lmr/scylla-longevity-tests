@@ -80,7 +80,7 @@ def test_list_all_available_nemesis(generate_file=True):
     disruption_list, disruptions_dict, disruption_classes = sisyphus.get_list_of_disrupt_methods(
         subclasses_list=subclasses, export_properties=True)
 
-    assert len(disruption_list) == 90
+    assert len(disruption_list) == 96
 
     if generate_file:
         with open(sct_abs_path('data_dir/nemesis.yml'), 'w', encoding="utf-8") as outfile1:
