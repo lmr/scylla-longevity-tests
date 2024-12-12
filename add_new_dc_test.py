@@ -183,7 +183,40 @@ class TestAddNewDc(LongevityTest):
             new_data_node2.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
             new_data_node3.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
 
-        remove_all_add_new_in_DC1()
+        def replace_all_nodes_in_DC1():
+            self.replace_cluster_node(new_node,
+                                      node_host_ids[0],
+                                      nodes_to_region[target_dc_name][-1].dc_idx,
+                                      dead_node_hostids=",".join(node_host_ids[1:]))
+
+            self.replace_cluster_node(new_node,
+                                      node_host_ids[1],
+                                      nodes_to_region[target_dc_name][-1].dc_idx,
+                                      dead_node_hostids=node_host_ids[2])
+
+            self.replace_cluster_node(new_node,
+                                      node_host_ids[2],
+                                      nodes_to_region[target_dc_name][-1].dc_idx)
+
+            # bootstrap new node in 1st dc
+            new_data_node = self.add_node_in_new_dc(nodes_to_region[target_dc_name][-1].dc_idx, 3)
+            for node in node_for_termination:
+                self.db_cluster.terminate_node(node)
+
+            self.db_cluster.wait_all_nodes_un()
+            status = self.db_cluster.get_nodetool_status()
+            self.log.info("Running rebuild  in restored DC")
+            new_data_node.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[-1]}", publish_event=True)
+
+            self.log.info("Running repair on all nodes")
+            for node in self.db_cluster.nodes:
+                node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
+
+            self.verify_data_can_be_read_from_new_dc(new_data_node)
+            self.log.info("Test completed.")
+
+        # remove_all_add_new_in_DC1()
+        replace_all_nodes_in_DC1()
 
     def reconfigure_keyspaces_to_use_network_topology_strategy(self, keyspaces: List[str], replication_factors: dict[str, int]) -> None:
         node = self.db_cluster.nodes[0]
