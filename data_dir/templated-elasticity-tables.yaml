@@ -1,0 +1,63 @@
+### DML ###
+
+# Keyspace Name
+keyspace: keyspace1
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};
+
+# Table name
+table: ${table_name}
+
+# The CQL for creating a table you wish to stress (optional if it already exists)
+table_definition: |
+    CREATE TABLE keyspace1.${table_name} (
+        key blob,
+        "C0" blob,
+        "C1" blob,
+        "C2" blob,
+        "C3" blob,
+        "C4" blob,
+        "C5" blob,
+        "C6" blob,
+        "C7" blob,
+        PRIMARY KEY (key)
+    )
+
+### Column Distribution Specifications ###
+columnspec:
+  - name: key
+    size: fixed(10) # Primary key size (10 bytes)
+  - name: C0
+    size: fixed(128) # Column size (128 bytes)
+  - name: C1
+    size: fixed(128)
+  - name: C2
+    size: fixed(128)
+  - name: C3
+    size: fixed(128)
+  - name: C4
+    size: fixed(128)
+  - name: C5
+    size: fixed(128)
+  - name: C6
+    size: fixed(128)
+  - name: C7
+    size: fixed(128)
+
+### Batch Ratio Distribution Specifications ###
+insert:
+  partitions: fixed(1)
+  select:    fixed(1)/1000
+  batchtype: UNLOGGED
+
+### A list of queries you wish to run against the schema ###
+queries:
+   read1:
+      cql: SELECT * FROM keyspace1.${table_name} WHERE key = ?
+      fields: samerow
+
+# Run stress
+# cassandra-stress user profile={} 'ops(insert=1)' cl=QUORUM n=2572262 -rate threads=1
+# cassandra-stress user profile={} 'ops(read1=1)' cl=QUORUM n=1286128 -rate threads=1

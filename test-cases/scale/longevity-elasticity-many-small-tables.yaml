@@ -1,0 +1,34 @@
+# This is a test case for having 90% disk utilization with a lot of small tables.
+# The data is split equally among 500 tables.
+# The dataset size is aligned with 'i4i.xlarge'.
+# It uses a c-s user-profile template for all 500 tables.
+# It runs 4 batches of 125 tables each.
+# On each batch cycle, 125 tables are created, then a load is generated for all of these tables.
+# When all the 125 stress writes/reads are done, it continue with the next batch until stress to all 500 tables is completed (after 4 cycles).
+# Each one of the 500 tables has both write and read load.
+
+test_duration: 600
+
+cs_duration: '0m'
+cs_user_profiles:
+    - data_dir/templated-elasticity-tables.yaml
+
+pre_create_schema: true
+user_profile_table_count: 500
+batch_size: 125
+
+n_loaders: 5
+n_monitor_nodes: 1
+n_db_nodes: 3
+add_node_cnt: 0
+
+instance_type_db: 'i4i.xlarge'
+instance_type_loader: 'c6i.2xlarge'
+user_prefix: 'longevity-elasticity-many-small-tables'
+root_disk_size_runner: 120
+
+
+cluster_health_check: false
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 60

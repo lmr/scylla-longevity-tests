@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_test.LongevityTest.test_user_batch_custom_time',
+    test_config: 'test-cases/scale/longevity-elasticity-many-small-tables.yaml',
+
+    timeout: [time: 4440, unit: 'MINUTES'],
+)
