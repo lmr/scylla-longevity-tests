@@ -318,7 +318,7 @@ class TestAddNewDc(LongevityTest):
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise
 
-        self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+        self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node], verification_node=verification_node)
         new_node.wait_node_fully_start()
         with new_node.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml.ignore_dead_nodes_for_replace = ""
