@@ -155,7 +155,7 @@ if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
 fi
 
 # if running on Build server
-if [[ ${USER} == "jenkins" ]]; then
+if [[ ${USER} == "jenkins" || ${USER} == "runner" ]]; then
     echo "Running on Build Server..."
     HOST_NAME=`hostname`
 else
@@ -173,7 +173,7 @@ else
   die "Please make sure you install either podman or docker on this machine to run hydra"
 fi
 
-if [[ ${USER} == "jenkins" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+if [[ ${USER} == "jenkins" || ${USER} == "runner" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
     echo "Pull version $VERSION from Docker Hub..."
     $tool pull ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}
 else
