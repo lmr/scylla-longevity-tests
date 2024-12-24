@@ -40,6 +40,8 @@ append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 
 
 use_mgmt: false
 
+experimental_features: []
+
 use_prepared_loaders: true
 
 append_scylla_yaml:

@@ -22,6 +22,8 @@ authenticator_password: 'cassandra'
 
 internode_compression: 'all'
 
+experimental_features: []
+
 use_mgmt: false
 
 # those are needed to be give by the job, via environment variable

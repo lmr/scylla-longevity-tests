@@ -110,6 +110,8 @@ skip_download: false
 authenticator_user: ''
 authenticator_password: ''
 
+experimental_features: ['views-with-tablets']
+
 # gemini defaults
 n_test_oracle_db_nodes: 1
 gemini_seed: 0

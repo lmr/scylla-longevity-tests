@@ -24,6 +24,8 @@ internode_compression: 'all'
 
 use_mgmt: false
 
+experimental_features: []
+
 use_preinstalled_scylla: false
 
 # those are needed to be give by the job, via environment variable
