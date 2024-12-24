@@ -190,19 +190,19 @@ fi
 DOCKER_ADD_HOST_ARGS=()
 
 # export all SCT_* env vars into the docker run
-SCT_OPTIONS=$(env | sed -n 's/^\(SCT_[^=]\+\)=.*/--env \1/p')
+SCT_OPTIONS=$(env | sed -n 's/\(SCT_.*\)=.*/--env \1/p')
 
 # export all PYTEST_* env vars into the docker run
-PYTEST_OPTIONS=$(env | sed -n 's/^\(PYTEST_[^=]\+\)=.*/--env \1/p')
+PYTEST_OPTIONS=$(env | sed -n 's/\(PYTEST_.*\)=.*/--env \1/p')
 
 # export all BUILD_* env vars into the docker run
-BUILD_OPTIONS=$(env | sed -n 's/^\(BUILD_[^=]\+\)=.*/--env \1/p')
+BUILD_OPTIONS=$(env | sed -n 's/\(BUILD_.*\)=.*/--env \1/p')
 
 # export all AWS_* env vars into the docker run
-AWS_OPTIONS=$(env | sed -n 's/^\(AWS_[^=]\+\)=.*/--env \1/p')
+AWS_OPTIONS=$(env | sed -n 's/\(AWS_.*\)=.*/--env \1/p')
 
 # export all JENKINS_* env vars into the docker run
-JENKINS_OPTIONS=$(env | sed -n 's/^\(JENKINS_[^=]\+\)=.*/--env \1/p')
+JENKINS_OPTIONS=$(env | sed -n 's/\(JENKINS_.*\)=.*/--env \1/p')
 
 is_podman="$($tool --help | { grep -o podman || :; })"
 docker_common_args=()
