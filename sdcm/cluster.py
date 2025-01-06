@@ -32,7 +32,6 @@ import traceback
 import itertools
 import json
 import ipaddress
-from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
 from datetime import datetime, timezone
 from textwrap import dedent
@@ -66,6 +65,7 @@ from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
+from sdcm.target_node_lock import run_nemesis
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.provision.common.utils import disable_daily_apt_triggers
 from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
@@ -4565,9 +4565,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
                         traceback=traceback.format_exc()).publish()
                 try:
-                    nemesis_class = self.nemesis[0] if self.nemesis else getattr(
-                        import_module('sdcm.nemesis'), "Nemesis")
-                    with nemesis_class.run_nemesis(node_list=db_cluster.data_nodes, nemesis_label="KMS encryption check") as target_node:
+                    with run_nemesis(node_list=db_cluster.data_nodes, nemesis_label="KMS encryption check") as target_node:
                         self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
                         ks_cf_list = db_cluster.get_non_system_ks_cf_list(

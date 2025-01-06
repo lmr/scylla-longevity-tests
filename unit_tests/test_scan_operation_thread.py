@@ -251,18 +251,13 @@ class ExecuteAsyncExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
         raise Exception("Exception")
 
 
-@pytest.mark.parametrize(("running_nemesis", 'severity'), [[True, 'WARNING'], [False, 'ERROR']])
 @pytest.mark.parametrize(('mode', 'execute_mock'), [
     ['partition', 'execute_async'],
     ['aggregate', 'execute'],
     ['table', 'execute']])
-def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, events, node):
+def test_scan_negative_exception(mode, execute_mock, events, node):
     # pylint: disable=redefined-outer-name
     # pylint: disable=too-many-arguments
-    if running_nemesis:
-        node.running_nemesis = MagicMock()
-    else:
-        node.running_nemesis = None
     if execute_mock == 'execute_async':
         connection = ExecuteAsyncExceptionMockCqlConnectionPatient()
     else:
@@ -279,4 +274,4 @@ def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, 
         ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
     all_events = get_event_log_file(events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
-    assert f"Severity.{severity}" in all_events[1] and "period_type=end" in all_events[1]
+    assert f"Severity.ERROR" in all_events[1] and "period_type=end" in all_events[1]

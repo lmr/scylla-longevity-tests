@@ -1,5 +1,6 @@
 import inspect
 import logging
+import threading
 from dataclasses import dataclass, field
 
 import pytest
@@ -22,6 +23,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass
 class Node:
     running_nemesis = None
+    lock = threading.Lock()
     public_ip_address: str = '127.0.0.1'
     name: str = 'Node1'
 

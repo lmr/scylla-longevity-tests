@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 from abc import abstractmethod
 from string import Template
-from typing import Optional, Type, NamedTuple, TYPE_CHECKING
+from typing import Optional, Type, NamedTuple
 
 from pytz import utc
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
@@ -18,6 +18,7 @@ from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-na
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm.remote import LocalCmdRunner
+from sdcm.target_node_lock import run_nemesis
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import FullScanEvent, FullPartitionScanReversedOrderEvent, FullPartitionScanEvent, \
     FullScanAggregateEvent
@@ -27,8 +28,6 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying, Retry
 
-if TYPE_CHECKING:
-    from sdcm.cluster import BaseNode
 
 ERROR_SUBSTRINGS = ("timed out", "unpack requires", "timeout", 'Host has been marked down or removed')
 BYPASS_CACHE_VALUES = [" BYPASS CACHE", ""]
@@ -103,12 +102,8 @@ class FullscanOperationBase:
         self.log.info("FullscanOperationBase scan_event: %s", self.scan_event)
         self.termination_event = self.fullscan_params.termination_event
         self.generator = generator
-        self.db_node = self._get_random_node()
         self.current_operation_stat = None
         self.log.info("FullscanOperationBase init finished")
-
-    def _get_random_node(self) -> BaseNode:
-        return self.generator.choice(self.fullscan_params.db_cluster.data_nodes)
 
     @abstractmethod
     def randomly_form_cql_statement(self) -> str:
@@ -131,51 +126,49 @@ class FullscanOperationBase:
                                         | FullPartitionScanReversedOrderEvent] = None) -> OneOperationStat:
         scan_event = scan_event or self.scan_event
         cmd = cmd or self.randomly_form_cql_statement()
-        with scan_event(node=self.db_node.name, ks_cf=self.fullscan_params.ks_cf, message=f"Will run command {cmd}",
+
+        with run_nemesis(self.fullscan_params.db_cluster.data_nodes, f'run_scan: {cmd}') as db_node:
+            with scan_event(node=db_node.name, ks_cf=self.fullscan_params.ks_cf, message=f"Will run command {cmd}",
+                            user=self.fullscan_params.user,
+                            password=self.fullscan_params.user_password) as scan_op_event:
+                self.current_operation_stat = OneOperationStat(
+                    op_type=scan_op_event.__class__.__name__,
+                    nemesis_at_start=db_node.running_nemesis,
+                    cmd=cmd
+                )
+
+                with self.fullscan_params.db_cluster.cql_connection_patient(
+                        node=db_node,
+                        connect_timeout=3000,
                         user=self.fullscan_params.user,
-                        password=self.fullscan_params.user_password) as scan_op_event:
-
-            self.current_operation_stat = OneOperationStat(
-                op_type=scan_op_event.__class__.__name__,
-                nemesis_at_start=self.db_node.running_nemesis,
-                cmd=cmd
-            )
-
-            with self.fullscan_params.db_cluster.cql_connection_patient(
-                    node=self.db_node,
-                    connect_timeout=300,
-                    user=self.fullscan_params.user,
-                    password=self.fullscan_params.user_password) as session:
-                try:
-                    scan_op_event.message = ''
-                    start_time = time.time()
-                    result = self.execute_query(session=session, cmd=cmd, event=scan_op_event)
-                    if result:
-                        self.fetch_result_pages(result=result, read_pages=self.fullscan_stats.read_pages)
-                    if not scan_op_event.message:
-                        scan_op_event.message = f"{type(self).__name__} operation ended successfully"
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-                    self.log.error(traceback.format_exc())
-                    msg = repr(exc)
-                    self.current_operation_stat.exceptions.append(repr(exc))
-                    msg = f"{msg} while running " \
-                          f"Nemesis: {self.db_node.running_nemesis}" if self.db_node.running_nemesis else msg
-                    scan_op_event.message = msg
-
-                    if self.db_node.running_nemesis or any(s in msg.lower() for s in ERROR_SUBSTRINGS):
-                        scan_op_event.severity = Severity.WARNING
-                    else:
-                        scan_op_event.severity = Severity.ERROR
-                finally:
-                    duration = time.time() - start_time
-                    self.fullscan_stats.time_elapsed += duration
-                    self.fullscan_stats.scans_counter += 1
-                    self.current_operation_stat.nemesis_at_end = self.db_node.running_nemesis
-                    self.current_operation_stat.duration = duration
-                    # success is True if there were no exceptions
-                    self.current_operation_stat.success = not bool(self.current_operation_stat.exceptions)
-                    self.update_stats(self.current_operation_stat)
-                    return self.current_operation_stat  # pylint: disable=lost-exception
+                        password=self.fullscan_params.user_password) as session:
+                    try:
+                        scan_op_event.message = ''
+                        start_time = time.time()
+                        result = self.execute_query(session=session, cmd=cmd, event=scan_op_event)
+                        if result:
+                            self.fetch_result_pages(result=result, read_pages=self.fullscan_stats.read_pages)
+                        if not scan_op_event.message:
+                            scan_op_event.message = f"{type(self).__name__} operation ended successfully"
+                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                        self.log.error(traceback.format_exc())
+                        msg = repr(exc)
+                        self.current_operation_stat.exceptions.append(repr(exc))
+                        scan_op_event.message = msg
+                        if any(s in msg.lower() for s in ERROR_SUBSTRINGS):
+                            scan_op_event.severity = Severity.WARNING
+                        else:
+                            scan_op_event.severity = Severity.ERROR
+                    finally:
+                        duration = time.time() - start_time
+                        self.fullscan_stats.time_elapsed += duration
+                        self.fullscan_stats.scans_counter += 1
+                        self.current_operation_stat.nemesis_at_end = db_node.running_nemesis
+                        self.current_operation_stat.duration = duration
+                        # success is True if there were no exceptions
+                        self.current_operation_stat.success = not bool(self.current_operation_stat.exceptions)
+                        self.update_stats(self.current_operation_stat)
+                        return self.current_operation_stat  # pylint: disable=lost-exception
 
     def update_stats(self, new_stat):
         self.fullscan_stats.stats.append(new_stat)
@@ -237,19 +230,19 @@ class FullPartitionScanOperation(FullscanOperationBase):
                                                                encoding='utf-8')
 
     def get_table_clustering_order(self) -> str:
-        node = self._get_random_node()
-        try:
-            with self.fullscan_params.db_cluster.cql_connection_patient(node=node, connect_timeout=300) as session:
-                # Using CL ONE. No need for a quorum since querying a constant fixed attribute of a table.
-                session.default_consistency_level = ConsistencyLevel.ONE
-                return get_table_clustering_order(ks_cf=self.fullscan_params.ks_cf,
-                                                  ck_name=self.fullscan_params.ck_name, session=session)
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.error(traceback.format_exc())
-            self.log.error('Failed getting table %s clustering order through node %s : %s',
-                           self.fullscan_params.ks_cf, node.name,
-                           error)
-        raise Exception('Failed getting table clustering order from all db nodes')
+        with run_nemesis(self.fullscan_params.db_cluster.data_nodes, 'get_table_clustering_order') as node:
+            try:
+                with self.fullscan_params.db_cluster.cql_connection_patient(node=node, connect_timeout=3000) as session:
+                    # Using CL ONE. No need for a quorum since querying a constant fixed attribute of a table.
+                    session.default_consistency_level = ConsistencyLevel.ONE
+                    return get_table_clustering_order(ks_cf=self.fullscan_params.ks_cf,
+                                                      ck_name=self.fullscan_params.ck_name, session=session)
+            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+                self.log.error(traceback.format_exc())
+                self.log.error('Failed getting table %s clustering order through node %s : %s',
+                               self.fullscan_params.ks_cf, node.name,
+                               error)
+            raise Exception('Failed getting table clustering order from all db nodes')
 
     def randomly_form_cql_statement(self) -> Optional[tuple[str, str]]:  # pylint: disable=too-many-branches
         """
@@ -262,75 +255,74 @@ class FullPartitionScanOperation(FullscanOperationBase):
         3) Add a random CK filter with random row values.
         :return: a CQL reversed-query
         """
-        db_node = self._get_random_node()
+        with run_nemesis(self.fullscan_params.db_cluster.data_nodes, 'randomly_form_cql_statement') as db_node:
+            with self.fullscan_params.db_cluster.cql_connection_patient(
+                    node=db_node, connect_timeout=3000) as session:
+                ck_random_min_value = self.generator.randint(a=1, b=self.fullscan_params.rows_count)
+                ck_random_max_value = self.generator.randint(a=ck_random_min_value, b=self.fullscan_params.rows_count)
+                self.ck_filter = ck_filter = self.generator.choice(list(self.reversed_query_filter_ck_by.keys()))
 
-        with self.fullscan_params.db_cluster.cql_connection_patient(
-                node=db_node, connect_timeout=300) as session:
-            ck_random_min_value = self.generator.randint(a=1, b=self.fullscan_params.rows_count)
-            ck_random_max_value = self.generator.randint(a=ck_random_min_value, b=self.fullscan_params.rows_count)
-            self.ck_filter = ck_filter = self.generator.choice(list(self.reversed_query_filter_ck_by.keys()))
+                if pks := get_partition_keys(ks_cf=self.fullscan_params.ks_cf, session=session, pk_name=self.fullscan_params.pk_name):
+                    partition_key = self.generator.choice(pks)
+                    # Form a random query out of all options, like:
+                    # select * from scylla_bench.test where pk = 1234 and ck < 4721 and ck > 2549 order by ck desc
+                    # limit 3467 bypass cache
+                    selected_columns = [self.fullscan_params.pk_name, self.fullscan_params.ck_name]
+                    if self.fullscan_params.include_data_column:
+                        selected_columns.append(self.fullscan_params.data_column_name)
+                    reversed_query = f'select {",".join(selected_columns)} from {self.fullscan_params.ks_cf}' + \
+                        f' where {self.fullscan_params.pk_name} = {partition_key}'
+                    query_suffix = self.limit = ''
+                    # Randomly add CK filtering ( less-than / greater-than / both / non-filter )
 
-            if pks := get_partition_keys(ks_cf=self.fullscan_params.ks_cf, session=session, pk_name=self.fullscan_params.pk_name):
-                partition_key = self.generator.choice(pks)
-                # Form a random query out of all options, like:
-                # select * from scylla_bench.test where pk = 1234 and ck < 4721 and ck > 2549 order by ck desc
-                # limit 3467 bypass cache
-                selected_columns = [self.fullscan_params.pk_name, self.fullscan_params.ck_name]
-                if self.fullscan_params.include_data_column:
-                    selected_columns.append(self.fullscan_params.data_column_name)
-                reversed_query = f'select {",".join(selected_columns)} from {self.fullscan_params.ks_cf}' + \
-                    f' where {self.fullscan_params.pk_name} = {partition_key}'
-                query_suffix = self.limit = ''
-                # Randomly add CK filtering ( less-than / greater-than / both / non-filter )
+                    # example: rows-count = 20, ck > 10, ck < 15, limit = 3 ==> ck_range = [11..14] = 4
+                    # ==> limit < ck_range
+                    # reversed query is: select * from scylla_bench.test where pk = 1 and ck > 10
+                    # order by ck desc limit 5
+                    # normal query should be: select * from scylla_bench.test where pk = 1 and ck > 15 limit 5
+                    match ck_filter:
+                        case 'lt_and_gt':
+                            # Example: select * from scylla_bench.test where pk = 1 and ck > 10 and ck < 15 order by ck desc
+                            reversed_query += self.reversed_query_filter_ck_by[ck_filter].format(
+                                self.fullscan_params.ck_name,
+                                ck_random_max_value,
+                                self.fullscan_params.ck_name,
+                                ck_random_min_value
+                            )
 
-                # example: rows-count = 20, ck > 10, ck < 15, limit = 3 ==> ck_range = [11..14] = 4
-                # ==> limit < ck_range
-                # reversed query is: select * from scylla_bench.test where pk = 1 and ck > 10
-                # order by ck desc limit 5
-                # normal query should be: select * from scylla_bench.test where pk = 1 and ck > 15 limit 5
-                match ck_filter:
-                    case 'lt_and_gt':
-                        # Example: select * from scylla_bench.test where pk = 1 and ck > 10 and ck < 15 order by ck desc
-                        reversed_query += self.reversed_query_filter_ck_by[ck_filter].format(
-                            self.fullscan_params.ck_name,
-                            ck_random_max_value,
-                            self.fullscan_params.ck_name,
-                            ck_random_min_value
-                        )
+                        case 'gt':
+                            # example: rows-count = 20, ck > 10, limit = 5 ==> ck_range = 20 - 10 = 10 ==> limit < ck_range
+                            # reversed query is: select * from scylla_bench.test where pk = 1 and ck > 10
+                            # order by ck desc limit 5
+                            # normal query should be: select * from scylla_bench.test where pk = 1 and ck > 15 limit 5
+                            reversed_query += self.reversed_query_filter_ck_by[ck_filter].format(
+                                self.fullscan_params.ck_name,
+                                ck_random_min_value
+                            )
 
-                    case 'gt':
-                        # example: rows-count = 20, ck > 10, limit = 5 ==> ck_range = 20 - 10 = 10 ==> limit < ck_range
-                        # reversed query is: select * from scylla_bench.test where pk = 1 and ck > 10
-                        # order by ck desc limit 5
-                        # normal query should be: select * from scylla_bench.test where pk = 1 and ck > 15 limit 5
-                        reversed_query += self.reversed_query_filter_ck_by[ck_filter].format(
-                            self.fullscan_params.ck_name,
-                            ck_random_min_value
-                        )
+                        case 'lt':
+                            # example: rows-count = 20, ck < 10, limit = 5 ==> limit < ck_random_min_value (ck_range)
+                            # reversed query is: select * from scylla_bench.test where pk = 1 and ck < 10
+                            # order by ck desc limit 5
+                            # normal query should be: select * from scylla_bench.test where pk = 1 and ck >= 5 limit 5
+                            reversed_query += self.reversed_query_filter_ck_by[ck_filter].format(
+                                self.fullscan_params.ck_name,
+                                ck_random_min_value
+                            )
 
-                    case 'lt':
-                        # example: rows-count = 20, ck < 10, limit = 5 ==> limit < ck_random_min_value (ck_range)
-                        # reversed query is: select * from scylla_bench.test where pk = 1 and ck < 10
-                        # order by ck desc limit 5
-                        # normal query should be: select * from scylla_bench.test where pk = 1 and ck >= 5 limit 5
-                        reversed_query += self.reversed_query_filter_ck_by[ck_filter].format(
-                            self.fullscan_params.ck_name,
-                            ck_random_min_value
-                        )
-
-                query_suffix = f"{query_suffix} {self.generator.choice(BYPASS_CACHE_VALUES)}"
-                normal_query = reversed_query + query_suffix
-                if random.choice([False] + [True]):  # Randomly add a LIMIT
-                    self.limit = random.randint(a=1, b=self.fullscan_params.rows_count)
-                    query_suffix = f' limit {self.limit}' + query_suffix
-                reversed_query += f' order by {self.fullscan_params.ck_name} {self.reversed_order}' + query_suffix
-                self.log.debug('Randomly formed normal query is: %s', normal_query)
-                self.log.debug('[scan: %s, type: %s] Randomly formed reversed query is: %s', self.fullscan_stats.scans_counter,
-                               ck_filter, reversed_query)
-            else:
-                self.log.debug('No partition keys found for table: %s! A reversed query cannot be executed!',
-                               self.fullscan_params.ks_cf)
-                return None
+                    query_suffix = f"{query_suffix} {self.generator.choice(BYPASS_CACHE_VALUES)}"
+                    normal_query = reversed_query + query_suffix
+                    if random.choice([False] + [True]):  # Randomly add a LIMIT
+                        self.limit = random.randint(a=1, b=self.fullscan_params.rows_count)
+                        query_suffix = f' limit {self.limit}' + query_suffix
+                    reversed_query += f' order by {self.fullscan_params.ck_name} {self.reversed_order}' + query_suffix
+                    self.log.debug('Randomly formed normal query is: %s', normal_query)
+                    self.log.debug('[scan: %s, type: %s] Randomly formed reversed query is: %s', self.fullscan_stats.scans_counter,
+                                   ck_filter, reversed_query)
+                else:
+                    self.log.debug('No partition keys found for table: %s! A reversed query cannot be executed!',
+                                   self.fullscan_params.ks_cf)
+                    return None
         return normal_query, reversed_query
 
     def fetch_result_pages(self, result: ResponseFuture, read_pages):
@@ -417,7 +409,6 @@ class FullPartitionScanOperation(FullscanOperationBase):
 
         full_partition_op_stat = OneOperationStat(
             op_type=self.__class__.__name__,
-            nemesis_at_start=self.db_node.running_nemesis,
             cmd=str(queries)
         )
 
@@ -433,7 +424,6 @@ class FullPartitionScanOperation(FullscanOperationBase):
             self.scan_event = FullPartitionScanEvent
             regular_op_stat = self.run_scan_event(cmd=normal_query, scan_event=self.scan_event)
             comparison_result = self._compare_output_files()
-            full_partition_op_stat.nemesis_at_end = self.db_node.running_nemesis
             full_partition_op_stat.exceptions.append(regular_op_stat.exceptions)
             full_partition_op_stat.exceptions.append(reversed_op_stat.exceptions)
             if comparison_result and not full_partition_op_stat.exceptions:

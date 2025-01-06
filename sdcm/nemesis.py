@@ -31,7 +31,7 @@ import json
 import itertools
 import enum
 from distutils.version import LooseVersion
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
 from collections import defaultdict, Counter, namedtuple
@@ -66,6 +66,8 @@ from sdcm.cluster_k8s import (
 )
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
+from sdcm.target_node_lock import run_nemesis, set_running_nemesis, unset_running_nemesis, \
+    NEMESIS_TARGET_SELECTION_LOCK, CantAcquireLockException
 from sdcm.logcollector import save_kallsyms_map
 from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
@@ -108,6 +110,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_authenticator, ParallelObject,
                                ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
 from sdcm.utils.features import is_tablets_feature_enabled
+from sdcm.utils.nemesis_thread_safe_operations import safe_cluster_start_stop, safe_node_restart
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
@@ -175,7 +178,6 @@ EXCLUSIVE_NEMESIS_NAMES = (
     "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
 )
 
-NEMESIS_TARGET_SELECTION_LOCK = Lock()
 DISRUPT_POOL_PROPERTY_NAME = "target_pool"
 
 
@@ -330,24 +332,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         setattr(cls, func.__name__, wrapper)  # bind it to Nemesis class
         return func  # returning func means func can still be used normally
 
-    @staticmethod
-    @contextmanager
-    def run_nemesis(node_list: list['BaseNode'], nemesis_label: str):
-        """
-        pick a node out of a `node_list`, and mark is as running_nemesis
-        for the duration of this context
-        """
-        with NEMESIS_TARGET_SELECTION_LOCK:
-            free_nodes = [node for node in node_list if not node.running_nemesis]
-            assert free_nodes, f"couldn't find nodes for running:`{nemesis_label}`, are all nodes running nemesis ?"
-            node = random.choice(free_nodes)
-            node.running_nemesis = nemesis_label
-        try:
-            yield node
-        finally:
-            with NEMESIS_TARGET_SELECTION_LOCK:
-                node.running_nemesis = None
-
     def use_nemesis_seed(self):
         if nemesis_seed := self.tester.params.get("nemesis_seed"):
             random.seed(nemesis_seed)
@@ -381,14 +365,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node = node
 
     def set_current_running_nemesis(self, node):
-        with NEMESIS_TARGET_SELECTION_LOCK:
-            node.running_nemesis = self.current_disruption
+        set_running_nemesis(node, self.current_disruption)
 
     @staticmethod
     def unset_current_running_nemesis(node):
-        if node is not None:
-            with NEMESIS_TARGET_SELECTION_LOCK:
-                node.running_nemesis = None
+        unset_running_nemesis(node)
 
     def set_target_node_pool_type(self, pool_type: NEMESIS_TARGET_POOLS = NEMESIS_TARGET_POOLS.data_nodes):
         """Set pool type to choose nodes for target node """
@@ -451,10 +432,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.target_node = random.choice(nodes)
 
             if current_disruption:
-                self.target_node.running_nemesis = current_disruption
+                set_running_nemesis(self.target_node, current_disruption)
                 self.set_current_disruption(current_disruption)
             elif self.current_disruption:
-                self.target_node.running_nemesis = self.current_disruption
+                set_running_nemesis(self.target_node, self.current_disruption)
             else:
                 raise ValueError("current_disruption is not set")
             self.log.info('Current Target: %s with running nemesis: %s',
@@ -983,7 +964,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_rolling_restart_cluster(self, random_order=False):
-        self.cluster.restart_scylla(random_order=random_order)
+        try:
+            safe_cluster_start_stop(self.target_node.running_nemesis, self.cluster)
+        except CantAcquireLockException as e:
+            UnsupportedNemesis(e)
 
     def disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back(self):
         """
@@ -3097,7 +3081,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 f'Schema restoration of {chosen_snapshot_tag} has failed!'
 
             with ignore_ycsb_connection_refused():
-                self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
+                safe_cluster_start_stop(self.target_node.running_nemesis, self.cluster)
             self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
                 keyspace=chosen_snapshot_info["keyspace_name"], repair_after_alter=False)
 
@@ -4079,7 +4063,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
             with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing(), \
-                self.run_nemesis(node_list=self.cluster.data_nodes, nemesis_label="DecommissionStreamingErr") as verification_node, \
+                run_nemesis(node_list=self.cluster.data_nodes, nemesis_label="DecommissionStreamingErr") as verification_node, \
                 FailedDecommissionOperationMonitoring(target_node=self.target_node,
                                                       verification_node=verification_node,
                                                       timeout=full_operations_timeout):
@@ -4397,7 +4381,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         }
                         is_restart_needed = True
                 if is_restart_needed:
-                    node.restart_scylla()
+                    safe_node_restart(self.target_node.running_nemesis, node)
 
         # Create table with encryption
         keyspace_name, table_name = self.cluster.get_test_keyspaces()[0], 'tmp_encrypted_table'
@@ -5291,7 +5275,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             decommission_timeout = 7200
             monitoring_decommission_timeout = decommission_timeout + 100
             un_nodes = self.cluster.get_nodes_up_and_normal()
-            with Nemesis.run_nemesis(node_list=un_nodes, nemesis_label="BootstrapStreaminError") as verification_node, \
+            with run_nemesis(node_list=un_nodes, nemesis_label="BootstrapStreaminError") as verification_node, \
                     FailedDecommissionOperationMonitoring(target_node=new_node, verification_node=verification_node,
                                                           timeout=monitoring_decommission_timeout):
 

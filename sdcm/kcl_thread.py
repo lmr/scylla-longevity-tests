@@ -21,7 +21,7 @@ import threading
 from functools import cached_property
 from typing import Dict
 
-from sdcm.nemesis import Nemesis
+from sdcm.target_node_lock import run_nemesis
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.stress.base import format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker
@@ -138,7 +138,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
             end_time = time.time() + self._timeout
 
             while not self._stop_event.is_set():
-                with Nemesis.run_nemesis(node_list=self.node_list, nemesis_label="Compare tables size by cf-stats") as node:
+                with run_nemesis(node_list=self.node_list, nemesis_label="Compare tables size by cf-stats") as node:
                     node.run_nodetool('flush')
 
                     dst_size = node.get_cfstats(dst_table)['Number of partitions (estimate)']
