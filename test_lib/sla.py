@@ -25,7 +25,7 @@ def sla_result_to_dict(sla_result):
 
 
 DEFAULT_SERVICE_LEVEL_SHARES = 1000
-MAX_ALLOWED_SERVICE_LEVELS = 8
+MAX_ALLOWED_SERVICE_LEVELS = 7
 
 
 @dataclass
