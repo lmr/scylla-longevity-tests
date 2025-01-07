@@ -1,0 +1,27 @@
+test_duration: 240
+
+round_robin: true
+
+# 500GB dataset
+prepare_write_cmd: [ "cassandra-stress write cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..131072000",
+                     "cassandra-stress write cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=131072001..262144000",
+                     "cassandra-stress write cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=262144001..393216000",
+                     "cassandra-stress write cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=393216001..524288000" ]
+
+stress_cmd: "cassandra-stress mixed cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=620 fixed=62500/s' -col 'size=FIXED(1024) n=FIXED(1)'"
+
+
+instance_type_db: 'i4i.4xlarge'
+instance_type_loader: 'c7i.2xlarge'
+
+region_name: us-east-1
+n_db_nodes: 3
+n_loaders: 4
+n_monitor_nodes: 1
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+
+user_prefix: 'manager-backup-restore-baseline'
+use_hdr_cs_histogram: true

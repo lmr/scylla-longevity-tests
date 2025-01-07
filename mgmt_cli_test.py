@@ -28,7 +28,6 @@ from dataclasses import dataclass
 
 import boto3
 import yaml
-from docker.errors import InvalidArgument
 
 from invoke import exceptions
 
@@ -46,6 +45,7 @@ from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
+from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
@@ -1656,7 +1656,7 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
             table = ManagerBackupBenchmarkResult(sut_timestamp=mgmt.get_scylla_manager_tool(
                 manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp)
         else:
-            raise InvalidArgument("Unknown report type")
+            raise ValueError("Unknown report type")
 
         for key, value in data.items():
             table.add_result(column=key, value=value, row=label, status=Status.UNSET)
@@ -1678,36 +1678,22 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         self.report_to_argus(ManagerReportType.BACKUP, backup_report, label)
         return task
 
-    def run_read_stress_and_report(self, label):
-        stress_queue = []
+    @latency_calculator_decorator
+    def mixed_latency_load(self):
+        stress_load = self.run_stress_thread(self.params.get('stress_cmd'))
+        self.get_stress_results(queue=stress_load)
 
-        for command in self.params.get('stress_read_cmd'):
-            stress_queue.append(self.run_stress_thread(command, round_robin=True, stop_test_on_failure=False))
-
-        with ExecutionTimer() as stress_timer:
-            for stress in stress_queue:
-                assert self.verify_stress_thread(cs_thread_pool=stress), "Read stress command"
-        InfoEvent(message=f'Read stress duration: {stress_timer.duration}s.').publish()
-
-        read_stress_report = {
-            "read time": int(stress_timer.duration.total_seconds()),
-        }
-        self.report_to_argus(ManagerReportType.READ, read_stress_report, label)
-
-    def test_backup_benchmark(self):
+    def test_backup_benchmark_mixed(self):
         self.log.info("Executing test_backup_restore_benchmark...")
 
         self.log.info("Write data to table")
         self.run_prepare_write_cmd()
 
-        self.log.info("Disable clusterwide compaction")
-        compaction_ops = CompactionOps(cluster=self.db_cluster)
-        #  Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
-        for node in self.db_cluster.nodes:
-            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
-
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+
+        self.log.info("Run read test")
+        self.mixed_latency_load()
 
         self.log.info("Create and report backup time")
         backup_task = self.create_backup_and_report(mgr_cluster, "Backup")
@@ -1715,16 +1701,12 @@ class ManagerBackupRestoreConcurrentTests(ManagerTestFunctionsMixIn):
         self.log.info("Remove backup")
         backup_task.delete_backup_snapshot()
 
-        self.log.info("Run read test")
-        self.run_read_stress_and_report("Read stress")
-
         self.log.info("Create and report backup time during read stress")
 
         backup_thread = threading.Thread(target=self.create_backup_and_report,
                                          kwargs={"mgr_cluster": mgr_cluster, "label": "Backup during read stress"})
 
-        read_stress_thread = threading.Thread(target=self.run_read_stress_and_report,
-                                              kwargs={"label": "Read stress during backup"})
+        read_stress_thread = threading.Thread(target=self.mixed_latency_load)
         backup_thread.start()
         read_stress_thread.start()
 
