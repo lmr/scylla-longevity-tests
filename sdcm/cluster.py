@@ -2780,7 +2780,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 cql_results)
         return peers_details
 
-    @retrying(n=5, sleep_time=10, raise_on_exceeded=False)
+    @retrying(n=10, sleep_time=5, raise_on_exceeded=False)
     def get_gossip_info(self) -> dict[BaseNode, dict]:
         gossip_info = self.run_nodetool('gossipinfo', verbose=False, warning_event_on_exception=(Exception,),
                                         publish_event=False)
@@ -4389,7 +4389,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             message=f"There are more then expected nodes running nemesis: {message}",
         ).publish()
 
-    @retrying(n=6, sleep_time=10, allowed_exceptions=(AssertionError,))
+    @retrying(n=10, sleep_time=5, allowed_exceptions=(AssertionError,))
     def wait_for_schema_agreement(self):
 
         for node in self.nodes:
