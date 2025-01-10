@@ -29,6 +29,9 @@ class Node:
     def scylla_shards(self):
         return 8
 
+    def log_message(self, *args, **kwargs):
+        pass
+
 
 @dataclass
 class Cluster:
@@ -45,6 +48,9 @@ class Cluster:
     @property
     def zero_nodes(self):
         return self.nodes
+
+    def log_message(self, *args, **kwargs):
+        pass
 
 
 @dataclass

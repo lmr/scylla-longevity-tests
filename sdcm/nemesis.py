@@ -1954,11 +1954,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def execute_disrupt_method(self, disrupt_method):
         disrupt_method_name = disrupt_method.__name__.replace('disrupt_', '')
-        self.log.info(">>>>>>>>>>>>>Started random_disrupt_method %s" % disrupt_method_name)
         self.metrics_srv.event_start(disrupt_method_name)
         try:
             disrupt_method()
-            self.log.info("<<<<<<<<<<<<<Finished random_disrupt_method %s" % disrupt_method_name)
         finally:
             self.metrics_srv.event_stop(disrupt_method_name)
 
@@ -5333,6 +5331,13 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
         except Exception:  # pylint: disable=broad-except
             nemesis.log.error("Error finalizing nemesis information in Argus", exc_info=True)
 
+    def get_nemesis_status(nemesis_event: DisruptionEvent) -> str:
+        if nemesis_event.severity == Severity.ERROR:
+            return NemesisStatus.FAILED
+        if nemesis_event.is_skipped:
+            return NemesisStatus.SKIPPED
+        return NemesisStatus.SUCCEEDED
+
     def data_validation_prints(args):
         try:
             if hasattr(args[0].tester, 'data_validator') and args[0].tester.data_validator:
@@ -5350,7 +5355,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
             args[0].log.debug(f'Data validator error: {err}')
 
     @wraps(method)
-    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements  # noqa: PLR0914
+    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements  # noqa: PLR0914, PLR0915
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         method_name = method.__name__
@@ -5366,15 +5371,20 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     # NOTE: exclusive nemesis will wait before the end of all other ones
                     time.sleep(10)
 
-            current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
-            args[0].set_target_node_pool_type(target_pool_type)
-            args[0].set_target_node(current_disruption=current_disruption)
-
             args[0].cluster.check_cluster_health()
             num_data_nodes_before = len(args[0].cluster.data_nodes)
             num_zero_nodes_before = len(args[0].cluster.zero_nodes)
             start_time = time.time()
-            args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
+
+            current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
+            args[0].set_target_node_pool_type(target_pool_type)
+            args[0].set_target_node(current_disruption=current_disruption)
+            start_msg = (f"Started disruption {method_name} ({current_disruption} nemesis) on the target node "
+                         f"'{str(args[0].target_node)}'")
+            args[0].log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol='>' * 12, msg=start_msg))
+            args[0].cluster.log_message(
+                "{start_symbol} {msg} {start_symbol}".format(start_symbol='=' * 12, msg=start_msg))
+
             class_name = args[0].get_class_name()
             if class_name.find('Chaos') < 0:
                 args[0].metrics_srv.event_start(class_name)
@@ -5455,6 +5465,12 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     if nemesis_info:
                         argus_finalize_nemesis_info(nemesis=args[0], method_name=method_name, start_time=int(
                             start_time), nemesis_event=nemesis_event)
+
+                    end_msg = (f"Finished disruption {method_name} ({current_disruption} nemesis) with status "
+                               f"'{get_nemesis_status(nemesis_event)}'")
+                    args[0].log.debug("{end_symbol} {msg} {end_symbol}".format(end_symbol='<' * 12, msg=end_msg))
+                    args[0].cluster.log_message(
+                        "{end_symbol} {msg} {end_symbol}".format(end_symbol='=' * 12, msg=end_msg))
 
             args[0].cluster.check_cluster_health()
             num_data_nodes_after = len(args[0].cluster.data_nodes)
