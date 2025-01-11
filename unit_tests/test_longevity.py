@@ -6,7 +6,7 @@ import pytest
 import threading
 from unittest.mock import MagicMock
 
-
+LongevityTest.__test__ = False
 LongevityTest = pytest.mark.skip(reason="we don't need to run those tests")(LongevityTest)
 
 

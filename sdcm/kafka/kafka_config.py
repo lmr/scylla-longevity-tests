@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import Field, BaseModel, Extra  # pylint: disable=no-name-in-module
+from pydantic import Field, BaseModel, ConfigDict  # pylint: disable=no-name-in-module
 
 # pylint: disable=too-few-public-methods
 
@@ -8,25 +8,24 @@ from pydantic import Field, BaseModel, Extra  # pylint: disable=no-name-in-modul
 class ConnectorConfiguration(BaseModel):
     # general options
     connector_class: str = Field(alias="connector.class")
-    topics: Optional[str]
+    topics: Optional[str] = ''
 
     # scylla-cdc-source-connector options
     # see https://github.com/scylladb/scylla-cdc-source-connector?tab=readme-ov-file#configuration
     # and https://github.com/scylladb/scylla-cdc-source-connector?tab=readme-ov-file#advanced-administration
-    scylla_name: Optional[str] = Field(alias="scylla.name")
-    scylla_table_names: Optional[str] = Field(alias="scylla.table.names")
-    scylla_user: Optional[str] = Field(alias="scylla.user")
-    scylla_password: Optional[str] = Field(alias="scylla.password")
+    scylla_name: Optional[str] = Field(alias="scylla.name", default=None)
+    scylla_table_names: Optional[str] = Field(alias="scylla.table.names", default=None)
+    scylla_user: Optional[str] = Field(alias="scylla.user", default=None)
+    scylla_password: Optional[str] = Field(alias="scylla.password", default=None)
 
     # kafka-connect-scylladb
     # see https://github.com/scylladb/kafka-connect-scylladb/blob/master/documentation/CONFIG.md
-    scylladb_contact_points: Optional[str] = Field(alias="scylladb.contact.points")
-    scylladb_keyspace: Optional[str] = Field(alias="scylladb.keyspace")
-    scylladb_username: Optional[str] = Field(alias="scylladb.username")
-    scylladb_password: Optional[str] = Field(alias="scylladb.password")
+    scylladb_contact_points: Optional[str] = Field(alias="scylladb.contact.points", default=None)
+    scylladb_keyspace: Optional[str] = Field(alias="scylladb.keyspace", default=None)
+    scylladb_username: Optional[str] = Field(alias="scylladb.username", default=None)
+    scylladb_password: Optional[str] = Field(alias="scylladb.password", default=None)
 
-    class Config:
-        extra = Extra.allow
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class SctKafkaConfiguration(BaseModel):

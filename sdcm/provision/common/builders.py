@@ -13,13 +13,16 @@
 
 from typing import Union
 
-from pydantic import BaseModel  # pylint: disable=no-name-in-module
+from pydantic import BaseModel, ConfigDict  # pylint: disable=no-name-in-module
 
 
 OptionalType = type(Union[str, None])
 
 
 class AttrBuilder(BaseModel):
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     @classmethod
     def get_properties(cls):
         return [prop for prop in dir(cls) if isinstance(getattr(cls, prop), property) and prop[0] != '_']

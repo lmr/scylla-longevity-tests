@@ -15,7 +15,7 @@ import abc
 from functools import cached_property
 from typing import List, Dict, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
@@ -49,6 +49,9 @@ class ClusterNode(BaseModel):
 
 
 class ClusterBase(BaseModel):
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     params: SCTConfiguration
     test_id: str
     common_tags: TagsType
