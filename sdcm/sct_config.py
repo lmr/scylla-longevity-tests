@@ -543,6 +543,9 @@ class SCTConfiguration(dict):
              In case of random option - Scylla will start with different (random) shards on every node of the cluster
              """),
 
+        dict(name="nodes_smp", env="SCT_NODES_SMP", type=list,
+             help="List of shard numbers of nodes in Scylla cluster; list of int, like [4, 5, 3]"),
+
         dict(name="seeds_selector", env="SCT_SEEDS_SELECTOR", type=str,
              choices=['random', 'first', 'all'],
              help="""How to select the seeds. Expected values: random/first/all"""),

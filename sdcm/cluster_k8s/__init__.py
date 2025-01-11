@@ -1745,7 +1745,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     pod_terminate_timeout = 5  # minutes
 
     def __init__(self, name: str, parent_cluster: PodCluster, node_prefix: str = "node", node_index: int = 1,
-                 base_logdir: Optional[str] = None, dc_idx: int = 0, rack=0):
+                 base_logdir: Optional[str] = None, dc_idx: int = 0, rack=0, shard_num=None):
         self.node_index = node_index
         cluster.BaseNode.__init__(
             self, name=name,
@@ -1753,7 +1753,8 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             base_logdir=base_logdir,
             node_prefix=node_prefix,
             dc_idx=dc_idx,
-            rack=rack)
+            rack=rack,
+            shard_num=shard_num)
         self.k8s_cluster = self.parent_cluster.k8s_clusters[self.dc_idx]
         self._rack_name = None
 
@@ -2310,7 +2311,7 @@ class LoaderStsContainer(BasePodContainer):
 class PodCluster(cluster.BaseCluster):
     PodContainerClass: Type[BasePodContainer] = BasePodContainer
 
-    def __init__(self,
+    def __init__(self,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  k8s_clusters: List[KubernetesCluster],
                  namespace: str = "default",
                  container: Optional[str] = None,
@@ -2322,6 +2323,7 @@ class PodCluster(cluster.BaseCluster):
                  params: Optional[dict] = None,
                  node_pool_name: Optional[str] = '',
                  add_nodes: Optional[bool] = True,
+                 nodes_smp: list[int] = []
                  ) -> None:
         self.k8s_clusters = k8s_clusters
         self.namespace = namespace
@@ -2335,7 +2337,8 @@ class PodCluster(cluster.BaseCluster):
                          params=params,
                          region_names=[],
                          node_type=node_type,
-                         add_nodes=add_nodes)
+                         add_nodes=add_nodes,
+                         nodes_smp=nodes_smp)
 
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Namespace: {self.namespace}"
@@ -2351,7 +2354,8 @@ class PodCluster(cluster.BaseCluster):
                                       node_prefix=self.node_prefix,
                                       node_index=node_index,
                                       dc_idx=dc_idx,
-                                      rack=rack)
+                                      rack=rack,
+                                      shard_num=self.get_node_shard_num(node_index))
         # NOTE: use lock to avoid hanging running in a multitenant setup
         with NODE_INIT_LOCK:
             node.init()
@@ -2486,6 +2490,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                  params: Optional[dict] = None,
                  node_pool_name: str = '',
                  add_nodes: bool = True,
+                 nodes_smp: list[int] = []
                  ) -> None:
         self.k8s_clusters = k8s_clusters
         self.namespace = self.generate_namespace(namespace_template=SCYLLA_NAMESPACE)
@@ -2509,7 +2514,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                          n_nodes=n_nodes,
                          params=params,
                          node_pool_name=node_pool_name,
-                         add_nodes=add_nodes)
+                         add_nodes=add_nodes,
+                         nodes_smp=nodes_smp)
         # NOTE: register callbacks for the Scylla pods IP change events
         for k8s_cluster in k8s_clusters:
             if k8s_cluster.scylla_pods_ip_change_tracker_thread:

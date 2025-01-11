@@ -42,7 +42,7 @@ class AzureNode(cluster.BaseNode):
     def __init__(self, azure_instance: VmInstance,  # pylint: disable=too-many-arguments
                  credentials, parent_cluster,
                  node_prefix='node', node_index=1,
-                 base_logdir=None, dc_idx=0, rack=0):
+                 base_logdir=None, dc_idx=0, rack=0, shard_num=None):
         self.node_index = node_index
         self.dc_idx = dc_idx
         self.parent_cluster = parent_cluster
@@ -59,7 +59,8 @@ class AzureNode(cluster.BaseNode):
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
                          dc_idx=dc_idx,
-                         rack=rack)
+                         rack=rack,
+                         shard_num=shard_num)
 
     def init(self) -> None:
         super().init()
@@ -178,7 +179,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                  provisioners: List[AzureProvisioner], credentials,
                  cluster_uuid=None, instance_type='Standard_L8s_v3', region_names=None,
                  user_name='root', cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=3, params=None, node_type=None):
+                 node_prefix='node', n_nodes=3, params=None, node_type=None, nodes_smp=[]):
         self.provisioners: List[AzureProvisioner] = provisioners
         self._image_id = image_id
         self._root_disk_size = root_disk_size
@@ -194,7 +195,8 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                          n_nodes=n_nodes,
                          params=params,
                          region_names=region_names,
-                         node_type=node_type)
+                         node_type=node_type,
+                         nodes_smp=nodes_smp)
         self.log.debug("AzureCluster constructor")
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):  # pylint: disable=too-many-arguments
@@ -227,7 +229,8 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                              node_index=node_index,
                              base_logdir=self.logdir,
                              dc_idx=dc_idx,
-                             rack=rack)
+                             rack=rack,
+                             shard_num=self.get_node_shard_num(self, node_index))
             node.init()
             return node
         except Exception as ex:  # noqa: BLE001
@@ -268,7 +271,7 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
                  provisioners: List[AzureProvisioner], credentials,
                  instance_type='Standard_L8s_v3',
                  user_name='ubuntu',
-                 user_prefix=None, n_nodes=3, params=None, region_names=None):
+                 user_prefix=None, n_nodes=3, params=None, region_names=None, nodes_smp=[]):
         # pylint: disable=too-many-locals
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
@@ -284,7 +287,8 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
             n_nodes=n_nodes,
             params=params,
             region_names=region_names,
-            node_type='scylla-db'
+            node_type='scylla-db',
+            nodes_smp=nodes_smp
         )
         self.version = '2.1'
 

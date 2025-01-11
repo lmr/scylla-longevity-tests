@@ -254,7 +254,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     SYSTEM_EVENTS_PATTERNS = SYSTEM_ERROR_EVENTS_PATTERNS + INSTANCE_STATUS_EVENTS_PATTERNS
 
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):  # pylint: disable=too-many-arguments,unused-argument
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0, shard_num=None):  # pylint: disable=too-many-arguments,unused-argument
         self.name = name
         self.rack = rack
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
@@ -262,6 +262,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.ssh_login_info = ssh_login_info
         self.logdir = os.path.join(base_logdir, self.name) if base_logdir else None
         self.dc_idx = dc_idx
+        self.shard_num = shard_num
 
         self._containers = {}
         self.is_seed = False
@@ -1753,7 +1754,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     message="Following arguments are filtered out: " + ','.join(args)
                 ).publish()
             )
-        if self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
+        if self.shard_num:
+            append_scylla_args += f" --smp {self.shard_num}"
+        elif self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
             append_scylla_args += f" --smp {self.scylla_random_shards()}"
 
         if append_scylla_args:
@@ -3191,7 +3194,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster', node_prefix='node', n_nodes=3, params=None,
-                 region_names=None, node_type=None, extra_network_interface=False, add_nodes=True):
+                 region_names=None, node_type=None, extra_network_interface=False, add_nodes=True, nodes_smp=[]):
         self.extra_network_interface = extra_network_interface
         if params is None:
             params = {}
@@ -3203,6 +3206,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
         self.node_prefix = '%s-%s' % (node_prefix, self.shortid)
+        self.nodes_smp = nodes_smp
         self._node_index = 0
         # I wanted to avoid some parameter passing
         # from the tester class to the cluster test.
@@ -3816,6 +3820,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     @property
     def cluster_backend(self):
         return self.params.get("cluster_backend")
+
+    def get_node_shard_num(self, node_index):
+        return self.nodes_smp[node_index - 1] if node_index - 1 < len(self.nodes_smp) else None
 
 
 class NodeSetupFailed(Exception):
