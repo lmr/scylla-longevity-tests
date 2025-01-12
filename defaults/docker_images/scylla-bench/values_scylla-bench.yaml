@@ -1,0 +1,2 @@
+scylla-bench:
+  image: 'scylladb/hydra-loaders:scylla-bench-v0.1.24'

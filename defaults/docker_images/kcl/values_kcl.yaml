@@ -1,0 +1,2 @@
+kcl:
+  image: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'

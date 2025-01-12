@@ -1,0 +1,2 @@
+harry:
+  image: 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'

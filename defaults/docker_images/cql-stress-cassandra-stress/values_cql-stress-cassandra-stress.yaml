@@ -1,0 +1,2 @@
+cql-stress-cassandra-stress:
+  image: 'docker.io/scylladb/hydra-loaders:cql-stress-cassandra-stress-20240718'

@@ -1,0 +1,2 @@
+ycsb:
+  image: 'scylladb/hydra-loaders:ycsb-jdk8-20220918'

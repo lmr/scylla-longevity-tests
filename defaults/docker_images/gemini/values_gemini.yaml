@@ -1,0 +1,2 @@
+gemini:
+  image: 'scylladb/hydra-loaders:gemini-v1.8.6'

@@ -204,19 +204,9 @@ aws_fallback_to_next_availability_zone: false
 
 enable_argus: true
 
-stress_image:
-  ndbench: 'scylladb/hydra-loaders:ndbench-jdk8-20210720'
-  ycsb: 'scylladb/hydra-loaders:ycsb-jdk8-20220918'
-  nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
-  cassandra-stress: 'scylladb/cassandra-stress:3.13.0'
-  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.22'
-  gemini: 'scylladb/hydra-loaders:gemini-v1.8.6'
-  alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
-  cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
-  kcl: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'
-  harry: 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'
-  latte: 'scylladb/hydra-loaders:latte-0.26.3-scylladb'
-  cql-stress-cassandra-stress: 'docker.io/scylladb/hydra-loaders:cql-stress-cassandra-stress-20240718'
+# the default stress tools are now defined a separate file for each /default/docker_image/[tool]/values_[tool].yaml
+# cause limitation dependabot have related to us putting all of them in same dockerhub repository
+stress_image: {}
 
 service_level_shares: [1000]
 

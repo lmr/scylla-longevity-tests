@@ -1,0 +1,2 @@
+nosqlbench:
+  image: 'scylladb/hydra-loaders:nosqlbench-5.21.2'

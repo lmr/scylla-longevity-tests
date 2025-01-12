@@ -1688,6 +1688,9 @@ class SCTConfiguration(dict):
             backend_config_files += self.defaults_config_files[str(backend)]
         self.multi_region_params = self.per_provider_multi_region_params.get(str(backend), [])
 
+        # load docker images defaults
+        self.load_docker_images_defaults()
+
         # 1) load the default backend config files
         files = anyconfig.load(list(backend_config_files))
         anyconfig.merge(self, files)
@@ -1972,6 +1975,17 @@ class SCTConfiguration(dict):
             raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
 
         SCTCapacityReservation.get_cr_from_aws(self)
+
+    def load_docker_images_defaults(self):
+        docker_images_dir = pathlib.Path(sct_abs_path('defaults/docker_images'))
+        if docker_images_dir.is_dir():
+            yaml_files = []
+            for root, _, files in os.walk(docker_images_dir):
+                yaml_files.extend([os.path.join(root, f) for f in files if f.endswith('.yaml')])
+            if yaml_files:
+                docker_images_defaults = anyconfig.load(yaml_files)
+                stress_image = {key: value.get('image') for key, value in docker_images_defaults.items()}
+                anyconfig.merge(self, dict(stress_image=stress_image))
 
     def log_config(self):
         self.log.info(self.dump_config())

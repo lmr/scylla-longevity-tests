@@ -1,0 +1,2 @@
+latte:
+  image: 'scylladb/hydra-loaders:latte-0.28.1-scylladb'

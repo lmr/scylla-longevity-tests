@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+
+    allow:
+      - dependency-name: "scylla-driver"
+        dependency-type: "direct"
+
+    reviewers:
+      - "scylladb/qa-maintainers"
+    assignees:
+      - "scylladb/qa-maintainers"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/defaults/docker_images/alternator-dns"
+      - "/defaults/docker_images/cassandra-stress"
+      - "/defaults/docker_images/cdc-stresser"
+      - "/defaults/docker_images/cql-stress-cassandra-stress"
+      - "/defaults/docker_images/gemini"
+      - "/defaults/docker_images/harry"
+      - "/defaults/docker_images/kcl"
+      - "/defaults/docker_images/latte"
+      - "/defaults/docker_images/nosqlbench"
+      - "/defaults/docker_images/ndbench"
+      - "/defaults/docker_images/scylla-bench"
+      - "/defaults/docker_images/ycsb"
+
+    schedule:
+      interval: "daily"
+      time: "03:00"
+
+    reviewers:
+      - "scylladb/qa-maintainers"
+    assignees:
+      - "scylladb/qa-maintainers"
