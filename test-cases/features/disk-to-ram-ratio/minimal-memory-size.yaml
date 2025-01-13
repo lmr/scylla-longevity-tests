@@ -1,0 +1,21 @@
+test_duration: 240
+
+prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=209715200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..209715200 -col 'n=FIXED(1) size=FIXED(512)' -log interval=5",
+                     "cassandra-stress write cl=QUORUM n=209715200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=209715201..419430400 -col 'n=FIXED(1) size=FIXED(512)' -log interval=5"
+                    ]
+stress_cmd: ["cassandra-stress read cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..209715200 -log interval=5",
+             "cassandra-stress write cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=50 -pop seq=209715201..419430400 -col 'n=FIXED(1) size=FIXED(512)' -log interval=5"
+            ]
+
+round_robin: true
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.large'
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 99
+
+user_prefix: 'disk-to-ram-minimal-memory-test'
+append_scylla_args: '--memory 2200M --blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'
