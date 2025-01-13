@@ -45,8 +45,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     Test a Scylla cluster stability over a time period.
     """
 
-    def __init__(self, *args, **kwargs):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
-        super().__init__(*args)
+    def setUp(self):
+        super().setUp()
 
         # This ignores large_data warning messages "Writing large collection" for large collections to prevent
         # creating SCT Events from these warnings.
