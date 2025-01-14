@@ -23,9 +23,10 @@ class TabletsConfiguration:
         return '{' + ', '.join(items) + '}'
 
 
-def wait_for_tablets_balanced(node):
+def wait_no_ongoing_topology_operations(node):
     """
-    Waiting for tablets to be balanced using REST API.
+    Waiting for having no ongoing tablets topology operations using REST API.
+    !!! It does not guarantee that tablets are balanced !!!
 
     doing it several times as there's a risk of:
     "currently a small time window after adding nodes and before load balancing starts during which
@@ -37,9 +38,9 @@ def wait_for_tablets_balanced(node):
             return
     time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
     client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
-    LOGGER.info("Waiting for tablets to be balanced")
+    LOGGER.info("Waiting for tablets topology operations to complete")
     for _ in range(3):
         client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology",
                                 params={}, timeout=3600, retry=3)
         time.sleep(5)
-    LOGGER.info("Tablets are balanced")
+    LOGGER.info("All ongoing tablets topology operations have been completed")

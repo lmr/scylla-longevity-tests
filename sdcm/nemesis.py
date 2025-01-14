@@ -131,7 +131,7 @@ from sdcm.utils.replication_strategy_utils import temporary_replication_strategy
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
-from sdcm.utils.tablets.common import wait_for_tablets_balanced
+from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import (
     MethodVersionNotFound, scylla_versions, ComparableScyllaVersion, get_systemd_version)
@@ -4217,7 +4217,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @latency_calculator_decorator(legend="Adding new nodes")
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
         nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
-        wait_for_tablets_balanced(nodes[0])
+        wait_no_tablets_migration_running(nodes[0])
         return nodes
 
     @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
