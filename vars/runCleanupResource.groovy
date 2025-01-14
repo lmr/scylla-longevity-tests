@@ -17,6 +17,8 @@ def call(Map params, String region){
     export SCT_CONFIG_FILES=${test_config}
     export SCT_CLUSTER_BACKEND="${params.backend}"
 
+    export SCT_INSTANCE_PROVISION=${params.provision_type}
+
     if [[ -n "${params.region ? params.region : ''}" ]] ; then
         export SCT_REGION_NAME=${current_region}
     fi

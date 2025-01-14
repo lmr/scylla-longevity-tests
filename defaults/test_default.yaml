@@ -228,6 +228,7 @@ use_dns_names: false
 
 use_placement_group: false
 use_capacity_reservation: false
+use_dedicated_host: false
 
 validate_large_collections: false
 

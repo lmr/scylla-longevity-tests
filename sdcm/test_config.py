@@ -35,6 +35,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
     KEEP_ALIVE_MONITOR_NODES = False
+    KEEP_ALIVE_DEDICATED_HOST = False
 
     REUSE_CLUSTER = False
     MIXED_CLUSTER = False
@@ -152,9 +153,11 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             cls.KEEP_ALIVE_LOADER_NODES = bool(val == 'keep')
         elif "monitor_nodes" in node_type:
             cls.KEEP_ALIVE_MONITOR_NODES = bool(val == 'keep')
+        elif "dedicated_host" in node_type:
+            cls.KEEP_ALIVE_DEDICATED_HOST = bool(val == 'keep')
 
     @classmethod
-    def should_keep_alive(cls, node_type: Optional[str]) -> bool:
+    def should_keep_alive(cls, node_type: Optional[str]) -> bool:  # noqa: PLR0911
         if cls.TEST_DURATION >= 11 * 60:
             return True
         if node_type is None:
@@ -165,6 +168,8 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             return cls.KEEP_ALIVE_LOADER_NODES
         if "monitor" in node_type:
             return cls.KEEP_ALIVE_MONITOR_NODES
+        if "dedicated_host" in node_type:
+            return cls.KEEP_ALIVE_DEDICATED_HOST
         return False
 
     @classmethod

@@ -71,3 +71,7 @@ scylla_network_config:
 
 # we are using monitor images, see `ami_id_monitor`
 monitor_branch: null
+
+use_dedicated_host: false
+post_behavior_dedicated_host: 'destroy'
+aws_dedicated_host_ids: []

@@ -63,6 +63,7 @@ from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
@@ -2874,6 +2875,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def stop_resources(self):  # pylint: disable=no-self-use
         self.log.debug('Stopping all resources')
         SCTCapacityReservation.cancel(self.params)
+        SCTDedicatedHosts.release(self.params)
         with silence(parent=self, name="Kill Stress Threads"):
             self.kill_stress_thread()
 

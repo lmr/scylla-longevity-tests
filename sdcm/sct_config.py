@@ -36,6 +36,7 @@ from pydantic import BaseModel
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
@@ -741,7 +742,7 @@ class SCTConfiguration(dict):
         dict(name="security_group_ids", env="SCT_SECURITY_GROUP_IDS", type=str_or_list,
              help="AWS security groups ids to use"),
 
-        dict(name="use_placement_group", env="SCT_USE_PLACEMENT_GROUP", type=str,
+        dict(name="use_placement_group", env="SCT_USE_PLACEMENT_GROUP", type=boolean,
              help="if true, create 'cluster' placement group for test case "
                   "for low-latency network performance achievement"),
 
@@ -1702,6 +1703,21 @@ class SCTConfiguration(dict):
              help="""reserves instances capacity for whole duration of the test run (AWS only).
              Fallbacks to next availabilit zone if capacity is not available"""),
 
+        dict(name="use_dedicated_host", env="SCT_USE_DEDICATED_HOST", type=boolean,
+             help="""Allocates dedicated hosts for the instances for the entire duration of the test run (AWS only)"""),
+
+        dict(name="aws_dedicated_host_ids", env="SCT_AWS_DEDICATED_HOST_IDS", type=str_or_list_or_eval,
+             help="""list of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)"""),
+
+        dict(name="post_behavior_dedicated_host", env="SCT_POST_BEHAVIOR_DEDICATED_HOST", type=str,
+             help="""
+            Failure/post test behavior, i.e. what to do with the dedicate hosts at the end of the test.
+
+            'destroy' - Destroy hosts (default)
+            'keep' - Keep hosts allocated
+         """,
+             choices=("keep", "destroy")),
+
         dict(name="bisect_start_date", env="SCT_BISECT_START_DATE", type=str,
              help="""Scylla build date from which bisecting should start.
               Setting this date enables bisection. Format: YYYY-MM-DD"""),
@@ -2162,6 +2178,7 @@ class SCTConfiguration(dict):
             raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
 
         SCTCapacityReservation.get_cr_from_aws(self)
+        SCTDedicatedHosts.reserve(self)
 
         # 19: validate kafka configuration
         if kafka_connectors := self.get('kafka_connectors'):
