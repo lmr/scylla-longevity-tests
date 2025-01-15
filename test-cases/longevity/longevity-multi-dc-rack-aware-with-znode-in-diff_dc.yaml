@@ -1,0 +1,25 @@
+test_duration: 800
+
+prepare_write_cmd:  ["cassandra-stress write cl=LOCAL_QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,eu-northscylla_node_north=0) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+                    ]
+
+stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,eu-northscylla_node_north=0) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5 -errors retries=50",
+             "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3,eu-northscylla_node_north=0) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5 -errors retries=50",
+             ]
+
+n_db_nodes: '4 4 0'
+n_loaders: '1 1'
+n_monitor_nodes: 1
+n_db_zero_token_nodes: '0 1 1'
+
+instance_type_db: 'i4i.4xlarge'
+zero_token_instance_type_db: 'i4i.large'
+use_zero_nodes: true
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_interval: 10
+nemesis_filter_seeds: false
+
+round_robin: false
+
+user_prefix: 'multi-dc-rackaware-with-znode-dc'
