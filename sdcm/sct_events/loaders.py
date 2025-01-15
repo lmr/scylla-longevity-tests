@@ -66,6 +66,13 @@ class GeminiStressEvent(BaseStressEvent):
         return fmt
 
 
+class HDRFileMissed(SctEvent):
+    def __init__(self, message: str, severity=Severity.NORMAL):
+        super().__init__(severity=severity)
+
+        self.message = message
+
+
 class CassandraStressEvent(StressEvent):
     ...
 
