@@ -34,7 +34,10 @@ stress_read_cmd: [
                   "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=750 -partition-offset=1251 -clustering-row-count=200000 -clustering-row-size=uniform:100..8192 -rows-per-request=10 -consistency-level=quorum -timeout=90s -concurrency=150 -connection-count=100 -iterations=0 -duration=6420m"
                  ]
 
-post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck IS NOT NULL AND v is not null PRIMARY KEY (v, pk, ck) with comment = 'TEST VIEW'"
+# Create MV and set tombstone_gc to 'repair' + a propagation_delay_in_seconds of 5 minutes for the tombstone-gc-verification table:
+post_prepare_cql_cmds: ["CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck IS NOT NULL AND v is not null PRIMARY KEY (v, pk, ck) with comment = 'TEST VIEW'",
+                        "ALTER TABLE scylla_bench.test with tombstone_gc = {'mode': 'repair', 'propagation_delay_in_seconds':'300'};"
+                       ]
 
 n_db_nodes: 5
 n_loaders: 5 # Each loader will have 1 scylla-bench process at every step of the test (prepare, verify, stress & stress_read)
@@ -74,3 +77,7 @@ use_preinstalled_scylla: true
 #  max_partitions_in_test_table: 1000
 #  partition_range_with_data_validation: 0-250
 #  limit_rows_number: 10000
+
+
+# Run a verification every 10 minutes:
+run_tombstone_gc_verification: '{"ks_cf": "scylla_bench.test", "interval": 600, "propagation_delay_in_seconds": 300}'

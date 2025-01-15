@@ -143,12 +143,19 @@ class SstableUtils:
         self.log.debug('Got %s tombstones for sstable: %s', num_tombstones, sstable)
         return num_tombstones
 
+    def verify_a_live_normal_node_is_used(self):
+        if not self.db_node:
+            self.db_node = next(node for node in self.db_cluster.data_nodes if node.db_up())
+        elif not self.db_node.db_up():
+            self.db_node = next(node for node in self.db_node.parent_cluster.data_nodes if node.db_up())
+
     def get_table_repair_date(self) -> str | None:
         """
         Search entries of requested table in system.repair_history
         Return last entry found.
         Example returned value: '2022-12-28 11:53:53'
         """
+        self.verify_a_live_normal_node_is_used()
         with self.db_cluster.cql_connection_patient(node=self.db_node, connect_timeout=300,
                                                     user=self.user, password=self.password) as session:
             try:
@@ -156,10 +163,12 @@ class SstableUtils:
                         f"AND table_name = '{self.table}' ALLOW FILTERING;"
                 results = session.execute(query)
                 output = results.all()
-                self.log.debug('SELECT repair_time results: %s', output)
-                if len(output) == 0:
+                output_length = len(output)
+                if output_length == 0:
                     self.log.debug('No repair history found for %s.%s', self.keyspace, self.table)
                     return None
+                self.log.debug('Number of rows in repair_time results: %d', output_length)
+                self.log.debug('Last row in repair_time results: %s', output[-1])
                 return str(output[-1].repair_time)
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error('Failed to get repair date of %s.%s. Error: %s', self.keyspace, self.table, exc)
