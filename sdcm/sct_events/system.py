@@ -172,6 +172,21 @@ class TestStepEvent(ContinuousEvent):
         return fmt
 
 
+class PerftuneResultEvent(InformationalEvent):
+    def __init__(self, message: str, severity: Severity, trace: Optional = None):
+        super().__init__(severity=severity)
+
+        self.message = message
+        self.trace = "".join(format_stack(trace)) if trace else None
+
+    @property
+    def msgfmt(self) -> str:
+        fmt = super().msgfmt + ": message={0.message}"
+        if self.trace:
+            fmt += "\nTraceback (most recent call last):\n{0.trace}"
+        return fmt
+
+
 class InfoEvent(SctEvent):
     def __init__(self, message: str, severity=Severity.NORMAL):
         super().__init__(severity=severity)

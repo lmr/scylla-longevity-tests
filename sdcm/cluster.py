@@ -2325,6 +2325,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             '/usr/bin/nodetool': self.offline_install_dir / 'share/cassandra/bin/nodetool',
             '/usr/bin/cqlsh': self.offline_install_dir / 'share/cassandra/bin/cqlsh',
             '/usr/bin/cassandra-stress': self.offline_install_dir / 'share/cassandra/bin/cassandra-stress',
+            '/opt/scylladb/scripts/perftune.py': self.offline_install_dir / 'scripts/perftune.py',
+            '/etc/scylla.d/perftune.yaml': self.offline_install_dir / 'etc/scylla.d/perftune.yaml',
         }
         return checklist.get(abs_path, self.offline_install_dir / abs_path)
 
