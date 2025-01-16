@@ -215,8 +215,9 @@ class TestAddNewDc(LongevityTest):
             self.verify_data_can_be_read_from_new_dc(new_data_node)
             self.log.info("Test completed.")
 
+        remove_one_replace_other_nodes_in_DC1()
         # remove_all_add_new_in_DC1()
-        replace_all_nodes_in_DC1()
+        # replace_all_nodes_in_DC1()
 
     def reconfigure_keyspaces_to_use_network_topology_strategy(self, keyspaces: List[str], replication_factors: dict[str, int]) -> None:
         node = self.db_cluster.nodes[0]
