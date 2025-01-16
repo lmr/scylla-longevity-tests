@@ -1,3 +1,4 @@
+import random
 import warnings
 from typing import Tuple, List
 
@@ -8,7 +9,6 @@ import pytest  # pylint: disable=no-name-in-module
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode, NodeSetupFailed, NodeSetupTimeout
 from sdcm.stress_thread import CassandraStressThread
-from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import optional_stage, skip_on_capacity_issues
 from sdcm.utils.replication_strategy_utils import NetworkTopologyReplicationStrategy
 from sdcm.exceptions import ReadBarrierErrorException
@@ -17,54 +17,10 @@ from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
 
 
-class TestAddNewDc(LongevityTest):
+class TestClusterQuorum(LongevityTest):
     """Test for procedure:
      https://docs.scylladb.com/operating-scylla/procedures/cluster-management/add-dc-to-existing-dc/
      """
-
-    def test_add_new_dc(self) -> None:  # pylint: disable=too-many-locals
-
-        self.log.info("Starting add new DC test...")
-        assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
-        system_keyspaces = ["system_distributed", "system_traces"]
-        # auth-v2 is used when consistent topology is enabled
-        if not self.db_cluster.nodes[0].raft.is_consistent_topology_changes_enabled:
-            system_keyspaces.insert(0, "system_auth")
-
-        # reconfigure system keyspaces to use NetworkTopologyStrategy
-        status = self.db_cluster.get_nodetool_status()
-        self.reconfigure_keyspaces_to_use_network_topology_strategy(
-            keyspaces=system_keyspaces,
-            replication_factors={dc: len(status[dc].keys()) for dc in status}
-        )
-        self.prewrite_db_with_data()
-        if not skip_optional_stage('main_load'):
-            read_thread, write_thread = self.start_stress_during_adding_new_dc()
-        # no need to change network topology
-        new_node = self.add_node_in_new_dc()
-
-        self.querying_new_node_should_return_no_data(new_node)  # verify issue #8354
-
-        status = self.db_cluster.get_nodetool_status()
-        self.reconfigure_keyspaces_to_use_network_topology_strategy(
-            keyspaces=system_keyspaces + ["keyspace1"],
-            replication_factors={dc: len(status[dc].keys()) for dc in status}
-        )
-
-        self.log.info("Running rebuild on each node in new DC")
-        new_node.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[0]}", publish_event=True)
-
-        self.log.info("Running repair on all nodes")
-        for node in self.db_cluster.nodes:
-            node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
-
-        if not skip_optional_stage('main_load'):
-            # wait for stress to complete
-            self.verify_stress_thread(cs_thread_pool=read_thread)
-            self.verify_stress_thread(cs_thread_pool=write_thread)
-
-        self.verify_data_can_be_read_from_new_dc(new_node)
-        self.log.info("Test completed.")
 
     def test_add_new_dc_with_zero_nodes(self):
         self.log.info("Starting add new DC with zero nodes test...")
@@ -219,6 +175,71 @@ class TestAddNewDc(LongevityTest):
         # remove_all_add_new_in_DC1()
         # replace_all_nodes_in_DC1()
 
+    def test_add_zero_node_to_single_dc(self):
+        self.log.info("Start test with zeronode")
+        assert len(self.params.total_db_nodes) == 1, "Single DC should be configured"
+
+        self.prewrite_db_with_data()
+
+        # Stop all nodes in 1st dc and check that raft quorum is lost
+        num_of_data_nodes = self.params.get("n_db_nodes")
+        lost_quorum_num = num_of_data_nodes // 2 if num_of_data_nodes % 2 == 0 else (num_of_data_nodes // 2) + 1
+        dead_nodes, alive_nodes = self.db_cluster.data_nodes[:
+                                                             lost_quorum_num], self.db_cluster.data_nodes[lost_quorum_num:]
+
+        self.log.info("Stop half nodes to simulate quorum lost")
+        for node in dead_nodes:
+            node.stop_scylla()
+
+        self.log.info("Assert that quorum is lost")
+        node = random.choice(alive_nodes)
+        with pytest.raises(ReadBarrierErrorException):
+            node.raft.call_read_barrier()
+
+        # Start all nodes in 1st dc
+        self.log.info("Start all nodes and restore cluster")
+        for node in dead_nodes:
+            node.start_scylla()
+        self.db_cluster.wait_all_nodes_un()
+
+        # Add new dc with zero node only
+        self.log.info("Add new zero node")
+        new_node = self.add_zero_node()
+
+        node_host_ids = []
+        node_for_termination = []
+
+        for node in dead_nodes:
+            node_host_ids.append(node.host_id)
+            node_for_termination.append(node)
+            node.stop_scylla()
+
+        # check that raft quorum is not lost
+        new_node.raft.call_read_barrier()
+
+        def replace_all_nodes():
+            for i in range(len(dead_nodes)):
+                self.log.info("Replace node %s with host_id: %s", dead_nodes[i].name, node_host_ids[i])
+                self.replace_cluster_node(new_node,
+                                          node_host_ids[i],
+                                          dead_node_hostids=",".join(node_host_ids[i+1:]))
+
+            for node in node_for_termination:
+                self.db_cluster.terminate_node(node)
+
+            self.db_cluster.wait_all_nodes_un()
+            self.log.info("Running rebuild  in restored DC")
+            alive_nodes[0].run_nodetool(sub_cmd="rebuild", publish_event=True)
+
+            self.log.info("Running repair on all nodes")
+            for node in self.db_cluster.nodes:
+                node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
+
+        replace_all_nodes()
+        stress_cmd = self.params.get('verify_data_after_entire_test')
+        end_stress = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
+        self.verify_stress_thread(cs_thread_pool=end_stress)
+
     def reconfigure_keyspaces_to_use_network_topology_strategy(self, keyspaces: List[str], replication_factors: dict[str, int]) -> None:
         node = self.db_cluster.nodes[0]
         self.log.info("Reconfiguring keyspace Replication Strategy")
@@ -271,6 +292,19 @@ class TestAddNewDc(LongevityTest):
         status = self.db_cluster.get_nodetool_status()
         assert len(status.keys()) == 3, f"new datacenter was not registered. Cluster status: {status}"
         self.log.info("New DC to cluster has been added")
+        return new_node
+
+    def add_zero_node(self) -> BaseNode:
+        if not self.params.get("use_zero_nodes"):
+            raise Exception("Zero node support should be enabled")
+        self.log.info("Adding new node")
+        new_node = self.db_cluster.add_nodes(1, enable_auto_bootstrap=True, is_zero_node=True)[0]  # add node
+        self.db_cluster.wait_for_init(node_list=[new_node], timeout=900,
+                                      check_node_health=True)
+        self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+        self.monitors.reconfigure_scylla_monitoring()
+
+        self.db_cluster.get_nodetool_status()
         return new_node
 
     @optional_stage('post_test_load')

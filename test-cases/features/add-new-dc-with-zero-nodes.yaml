@@ -1,0 +1,20 @@
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20900 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+
+stress_cmd: ["cassandra-stress read cl=LOCAL_QUORUM duration=20m -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress write cl=LOCAL_QUORUM duration=20m -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+             ]
+verify_data_after_entire_test: "cassandra-stress read cl=LOCAL_QUORUM n=20900 -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+
+n_db_nodes: '3 3 0'  # make n_db_nodes configured as multi-dc with last dc set to 0 (so later easily new node can be added)
+region_name: 'eu-west-1 eu-west-2 eu-north-1'
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.xlarge'
+seeds_num: 3
+
+user_prefix: 'add-new-dc'
+
+n_db_zero_token_nodes: '0 0 0'
+zero_token_instance_type_db: 'i4i.large'
+use_zero_nodes: true

@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import random
+import json
 
 from enum import Enum
 from abc import ABC, abstractmethod
@@ -13,6 +14,9 @@ from sdcm.sct_events import Severity
 from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, is_consistent_cluster_management_feature_enabled
 from sdcm.utils.health_checker import HealthEventsGenerator
 from sdcm.wait import wait_for
+from sdcm.rest.raft_api import RaftApi
+from sdcm.exceptions import ReadBarrierErrorException
+
 
 
 LOGGER = logging.getLogger(__name__)
@@ -137,6 +141,9 @@ class RaftFeatureOperations(ABC):
         log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
         return list(map(self.get_message_waiting_timeout, log_patterns))
 
+    def call_read_barrier(self):
+        ...
+
 
 class RaftFeature(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]] = {
@@ -177,14 +184,10 @@ class RaftFeature(RaftFeatureOperations):
         group0_members = []
         try:
             with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
-                row = session.execute("select value from system.scylla_local where key = 'raft_group0_id'").one()
-                if not row:
-                    return []
-                raft_group0_id = row.value
-
+                raft_group0_id = self.get_group0_id(session)
+                assert raft_group0_id, "Group0 id was not found"
                 rows = session.execute(f"select server_id, can_vote from system.raft_state  \
                                         where group_id = {raft_group0_id} and disposition = 'CURRENT'").all()
-
                 for row in rows:
                     group0_members.append({"host_id": str(row.server_id),
                                            "voter": row.can_vote})
@@ -347,6 +350,37 @@ class RaftFeature(RaftFeatureOperations):
         LOGGER.debug("Group0 and token-ring are consistent on node %s (host_id=%s)...",
                      self._node.name, self._node.host_id)
 
+    def get_group0_id(self, session) -> str:
+        try:
+            row = session.execute("select value from system.scylla_local where key = 'raft_group0_id'").one()
+            return row.value
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            err_msg = f"Get group0 members failed with error: {exc}"
+            LOGGER.error(err_msg)
+            return ""
+
+    def call_read_barrier(self, timeout: int = 60):
+        """ Wait until the node applies all previously committed Raft entries
+
+        Any schema/topology changes are committed with Raft group0 on node. Before
+        change is written to node, raft group0 checks that all previous schema/
+        topology changes were applied. Raft group0 triggers read_barrier on node, and
+        node applies all previous changes(commits) before new schema/operation
+        write will be applied. After read barrier finished, it guarantees that
+        node has all schema/topology changes, which was done in cluster before
+        read_barrier started on node.
+        """
+        with self._node.parent_cluster.cql_connection_patient_exclusive(node=self._node) as session:
+            raft_group0_id = self.get_group0_id(session)
+            assert raft_group0_id, "Group0 id was not found"
+        api = RaftApi(self._node)
+        result = api.read_barrier(group_id=raft_group0_id, timeout=timeout)
+        LOGGER.debug("Api response %s", result)
+        if not result:
+            return
+        status = json.loads(result)
+        raise ReadBarrierErrorException(f"Error code: {status['code']}, Error message: {status['message']}")
+
 
 class NoRaft(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS = {
@@ -406,6 +440,9 @@ class NoRaft(RaftFeatureOperations):
 
         yield None
 
+    def call_read_barrier(self):
+        ...
+
 
 def get_raft_mode(node) -> RaftFeature | NoRaft:
     with node.parent_cluster.cql_connection_patient(node) as session:
@@ -442,5 +479,5 @@ def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address:
 
 __all__ = ["get_raft_mode",
            "get_node_status_from_system_by",
-           "Group0MembersNotConsistentWithTokenRingMembersException",
+           "Group0MembersNotConsistentWithTokenRingMembersException", "RestApiError",
            "TopologyOperations"]
