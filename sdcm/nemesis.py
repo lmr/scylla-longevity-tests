@@ -225,6 +225,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     manager_operation: bool = False  # flag that signals that the nemesis uses scylla manager
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
+    full_storage_utilization: bool = False
 
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, **kwargs):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -2102,11 +2103,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: 'self' is used by the 'scylla_versions' decorator
         return ''
 
-    def disrupt_truncate(self):
-        keyspace_truncate = 'ks_truncate'
+    def disrupt_truncate(self, full_storage_utilization=False):
+        keyspace_truncate = 'ks_truncate' if not full_storage_utilization else 'refill_keyspace'
         table = 'standard1'
 
-        self._prepare_test_table(ks=keyspace_truncate)
+        self._prepare_test_table(ks=keyspace_truncate) if not full_storage_utilization else None
 
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
         with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
@@ -4361,6 +4362,67 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info("Cluster shrink finished. Current number of data nodes %s", num_of_nodes)
         InfoEvent(message=f'Cluster shrink finished. Current number of data nodes {num_of_nodes}').publish()
 
+    @target_data_nodes
+    def disrupt_full_storage_utilization(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        new_nodes = self.scaleout_at_full_storage(rack=None)
+        new_nodes = new_nodes if self.tester.params.get('nemesis_grow_shrink_instance_type') else None
+        self.scalein_to_reach_full_storage(rack=None, new_nodes=new_nodes)
+  
+    def scaleout_at_full_storage(self, rack=None):
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        InfoEvent(message=f"Start grow cluster by {add_nodes_number} data nodes").publish()
+        new_nodes = []
+        stress_queue = None
+        for idx in range(add_nodes_number):
+            # if rack is not specified, round-robin racks to spread nodes evenly
+            rack_idx = rack if rack is not None else idx % self.cluster.racks_count
+            if idx == 0:
+                new_nodes += self.add_new_nodes(count=1, rack=rack_idx,
+                                            instance_type=self.tester.params.get('nemesis_grow_shrink_instance_type'))
+                # Before starting refilling data current c-s need to be stopped
+                self.tester.stop_load_during_nemesis()
+                self.tester.wait_no_compactions_running()
+                self.log.info("Started: refill data to 90")
+                refill_90_percent = self.tester.params.get('stress_cmd_w')
+                stress_queue = self.tester.run_stress_thread(stress_cmd=refill_90_percent, stress_num=1, stats_aggregate_cmds=False)
+                self.tester.get_stress_results(queue=stress_queue, store_results=False)
+                self.log.info("Completed: refill data to 90")
+                self.tester.wait_no_compactions_running()
+                self.log.info("Completed: refill data to 90 - no compactions running..proceed")
+                stress_cmd = self.tester.params.get('stress_cmd_m')
+                stress_queue = self.tester.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=180)
+                # wait for c-s to start
+                time.sleep(120)
+            else:
+                new_nodes += self.add_new_nodes(count=1, rack=rack_idx,
+                                            instance_type=self.tester.params.get('nemesis_grow_shrink_instance_type'))
+        self.log.info("Finish cluster grow")
+        time.sleep(self.interval)
+        return new_nodes
+
+    def scalein_to_reach_full_storage(self, rack=None, new_nodes: list[BaseNode] | None = None):
+        nodes_count = self.tester.params.get('nemesis_add_node_cnt')
+        InfoEvent(message=f'Start shrink cluster by {nodes_count} nodes').publish()
+        self.log.info("Start shrink cluster by %s nodes", nodes_count)
+        for idx in range(nodes_count):
+            self._decommission_nodes(
+                1,
+                rack,
+                is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
+                dc_idx=self.target_node.dc_idx,
+                exact_nodes=[new_nodes[idx]],
+            )
+            self.disrupt_truncate(full_storage_utilization=True) if idx == 0 else None
+
+        num_of_nodes = len(self.cluster.data_nodes)
+        self.log.info("Cluster shrink finished. Current number of data nodes %s", num_of_nodes)
+        InfoEvent(message=f'Cluster shrink finished. Current number of data nodes {num_of_nodes}').publish()
+
     # TODO: add support for the 'LocalFileSystemKeyProviderFactory' and 'KmipKeyProviderFactory' key providers
     # TODO: add encryption for a table with large partitions?
 
@@ -5641,6 +5703,13 @@ class GrowShrinkClusterNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_grow_shrink_cluster()
+
+class FullStorageUtilizationNemesis(Nemesis):
+    disruptive = False
+    full_storage_utilization = True
+
+    def disrupt(self):
+        self.disrupt_full_storage_utilization()
 
 
 class AddRemoveRackNemesis(Nemesis):
