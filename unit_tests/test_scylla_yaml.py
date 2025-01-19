@@ -240,6 +240,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'enable_in_memory_data_store': None,
                 'enable_ipv6_dns_lookup': None,
                 'enable_keyspace_column_family_metrics': None,
+                'enable_node_aggregated_table_metrics': None,
                 'enable_repair_based_node_ops': None,
                 'allowed_repair_based_node_ops': None,
                 'enable_shard_aware_drivers': None,
