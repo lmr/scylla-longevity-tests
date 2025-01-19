@@ -41,7 +41,8 @@ from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
     get_node_supported_sstable_versions,
-    get_node_enabled_sstable_version
+    get_node_enabled_sstable_version,
+    ComparableScyllaVersion,
 )
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import (
@@ -289,6 +290,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             scylla_pkg = 'scylla-enterprise' if new_is_enterprise else 'scylla'
             ver_suffix = r'\*{}'.format(new_version) if new_version else ''
             scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
+
+            if ComparableScyllaVersion(self.params.scylla_version_upgrade_target) >= '2025.1.0~dev':
+                scylla_pkg = 'scylla'
+                scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
+
             if orig_is_enterprise != new_is_enterprise:
                 self.upgrade_rollback_mode = 'reinstall'
                 if self.params.get('use_preinstalled_scylla'):

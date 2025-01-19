@@ -1843,6 +1843,7 @@ class SCTConfiguration(dict):
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         super().__init__()
         self.scylla_version = None
+        self.scylla_version_upgrade_target = None
         self.is_enterprise = False
 
         self.log = logging.getLogger(__name__)
@@ -2450,6 +2451,7 @@ class SCTConfiguration(dict):
             if not self.get('target_upgrade_version'):
                 self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
             scylla_version = get_branch_version(new_scylla_repo, full_version=True)
+            self.scylla_version_upgrade_target = scylla_version
             self.update_argus_with_version(scylla_version, "scylla-server-upgrade-target")
 
     def _check_unexpected_sct_variables(self):
