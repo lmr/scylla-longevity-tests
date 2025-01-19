@@ -33,6 +33,8 @@ import enum
 from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
+from itertools import cycle
+
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -2325,6 +2327,82 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         while time.time() < end_time:
             self._add_drop_column()
 
+    def _parallel_add_drop_column(self, sessions, drop=True, add=True):  # pylint: disable=too-many-branches
+        self._add_drop_column_target_table = self._add_drop_column_get_target_table(
+            self._add_drop_column_target_table)
+        if self._add_drop_column_target_table is None:
+            return
+        added_columns_info = self._add_drop_column_get_added_columns_info(self._add_drop_column_target_table,
+                                                                          self._add_drop_column_columns_info)
+        added_columns_info.get('column_names', None)
+        if not added_columns_info['column_names']:
+            drop = []
+        if drop:
+            drop = self._add_drop_column_generate_columns_to_drop(added_columns_info)
+        if add:
+            add = self._add_drop_column_generate_columns_to_add(added_columns_info)
+        if not add and not drop:
+            return
+
+        def remove_columns_callback(columns, result):
+            self.log.debug(f"remove_columns_info {columns}, {result}")
+            for column_name in columns:
+                del added_columns_info['column_names'][column_name]
+
+        def add_columns_callback(columns, result):
+            self.log.debug(f"add_columns_info {columns}, {result}")
+            for column_name, column_type in columns:
+                added_columns_info['column_names'][column_name] = column_type
+                column_type.remember_variant(added_columns_info['column_types'])
+
+        cmds = []
+        session_iteratior = cycle(sessions)
+        table_name = f"{self._add_drop_column_target_table[0]}.{self._add_drop_column_target_table[1]}"
+        # TBD: Scylla does not support DROP and ADD in the same statement
+        if bool(random.getrandbits(1)):  # randomize commands by splitting 1 add/drop command into multiple
+            if drop:
+                cmds.append({"callback": partial(remove_columns_callback, columns=drop),
+                             "cmd": f"ALTER TABLE {table_name} DROP ( {', '.join(drop)} );",
+                             "session": next(session_iteratior)})
+            if add:
+                cmds.append({"callback": partial(add_columns_callback, columns=add),
+                             "cmd": f"ALTER TABLE {table_name} ADD "
+                                    f"( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );",
+                             "session": next(session_iteratior)})
+        else:
+            for column in drop:
+                cmds.append({"callback": partial(remove_columns_callback, columns=[column]),
+                             "cmd": f"ALTER TABLE {table_name} DROP ( {column} );",
+                             "session": next(session_iteratior)})
+            for column in add:
+                cmds.append({"callback": partial(add_columns_callback, columns=[column]),
+                             "cmd": f"ALTER TABLE {table_name} ADD ( {column[0]} {column[1]} );",
+                             "session": next(session_iteratior)})
+
+        def execute_add_drop_cmd(command):
+            command["future"] = command["session"].execute_async(command["cmd"])
+
+        with ThreadPoolExecutor(max_workers=10, thread_name_prefix='AddDropColumnThread') as thread_pool:
+            thread_pool.map(execute_add_drop_cmd, cmds)
+
+        for cmd in cmds:
+            try:
+                cmd["callback"](result=cmd["future"].result())
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.info(f"Add/Remove Column Nemesis: CQL query '{cmd['cmd']}' "
+                              f"execution has failed with error '{str(exc)}'")
+
+    def _parallel_add_drop_column_run_in_cycle(self):
+        self.use_nemesis_seed()
+        start_time = time.time()
+        end_time = start_time + 600
+        while time.time() < end_time:
+            with self.cluster.cql_connection_patient(self.target_node) as session_1:
+                with self.cluster.cql_connection_patient(self.target_node) as session_2:
+                    session_1.default_consistency_level = ConsistencyLevel.ALL
+                    session_2.default_consistency_level = ConsistencyLevel.ALL
+                    self._parallel_add_drop_column([session_1, session_2])
+
     def verify_initial_inputs_for_delete_nemesis(self):
         test_keyspaces = self.cluster.get_test_keyspaces()
 
@@ -2582,19 +2660,25 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Step-2: delete_range_in_few_partitions
         self.delete_range_in_few_partitions(ks_cf, partitions_for_exclude)
 
-    def disrupt_add_drop_column(self):
+    def disrupt_add_drop_column(self, parallel_version=False):
         """
         It searches for a table that allow add/drop columns (non compact storage table)
         If there is no such table it draw an error and quit
         It keeps tracking what columns where added and never drops column that were added by someone else.
         """
-        self.log.debug("AddDropColumnMonkey: Started")
+        nemesis_name = "AddDropColumnMonkey"
+        exec_function = self._add_drop_column_run_in_cycle
+        if parallel_version:
+            nemesis_name = "ParallelAddDropColumnMonkey"
+            exec_function = self._parallel_add_drop_column_run_in_cycle
+
+        self.log.debug(f"{nemesis_name}: Started")
         self._add_drop_column_target_table = self._add_drop_column_get_target_table(
             self._add_drop_column_target_table)
         if self._add_drop_column_target_table is None:
-            raise UnsupportedNemesis("AddDropColumnMonkey: can't find table to run on")
-        InfoEvent(f'AddDropColumnMonkey table {".".join(self._add_drop_column_target_table)}').publish()
-        self._add_drop_column_run_in_cycle()
+            raise UnsupportedNemesis("{nemesis_name}: can't find table to run on")
+        InfoEvent(f'{nemesis_name} table {".".join(self._add_drop_column_target_table)}').publish()
+        exec_function()
 
     def modify_table_comment(self):
         # default: comment = ''
@@ -6204,6 +6288,20 @@ class AddDropColumnMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_add_drop_column()
+
+
+class ParallelAddDropColumnMonkey(Nemesis):
+    # Experimental, all nemesis selectors are disabled
+    disruptive = False
+    run_with_gemini = False
+    networking = False
+    kubernetes = False
+    limited = False
+    schema_changes = False
+    free_tier_set = False
+
+    def disrupt(self):
+        self.disrupt_add_drop_column(parallel_version=True)
 
 
 class ToggleTableIcsMonkey(Nemesis):

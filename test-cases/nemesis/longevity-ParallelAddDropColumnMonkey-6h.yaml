@@ -1,0 +1,23 @@
+test_duration: 600
+
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=360m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=360m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+             ]
+
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+round_robin: true
+
+instance_type_db: 'i4i.xlarge'
+
+nemesis_class_name: 'ParallelAddDropColumnMonkey'
+nemesis_interval: 5
+nemesis_filter_seeds: false
+
+seeds_num: 1
+
+user_prefix: 'longevity-ParallelAddDropColumnMonkey-6h'
+#append_scylla_args: '--logger-log-level migration_manager=trace:group0_raft_sm=trace:raft=trace'
