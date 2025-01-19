@@ -65,6 +65,16 @@
 - disrupt_drain_kubernetes_node_then_replace_scylla_node:
   - disruptive = True
   - kubernetes = True
+- disrupt_drop:
+  - disruptive = False
+  - kubernetes = True
+  - limited = True
+  - free_tier_set = True
+- disrupt_drop_perf:
+  - disruptive = False
+  - kubernetes = True
+  - limited = True
+  - free_tier_set = True
 - disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
   - disruptive = True
   - kubernetes = False
@@ -74,7 +84,19 @@
 - disrupt_end_of_quota_nemesis:
   - disruptive = True
   - config_changes = True
+- disrupt_grow_cluster:
+  - disruptive = True
+  - kubernetes = True
+  - topology_changes = True
+- disrupt_grow_fill:
+  - disruptive = True
+  - kubernetes = True
+  - topology_changes = True
 - disrupt_grow_shrink_cluster:
+  - disruptive = True
+  - kubernetes = True
+  - topology_changes = True
+- disrupt_grow_shrink_datacenter:
   - disruptive = True
   - kubernetes = True
   - topology_changes = True
@@ -82,6 +104,11 @@
   - disruptive = True
   - kubernetes = True
   - config_changes = True
+- disrupt_grow_shrink_zero_nodes:
+  - disruptive = True
+  - schema_changes = False
+  - free_tier_set = False
+  - zero_node_changes = True
 - disrupt_hard_reboot_node:
   - disruptive = True
   - kubernetes = True
@@ -257,7 +284,6 @@
 - disrupt_rolling_restart_cluster:
   - disruptive = True
   - kubernetes = True
-  - config_changes = True
   - free_tier_set = True
 - disrupt_run_cdcstressor_tool:
   - disruptive = False
@@ -266,6 +292,9 @@
   - disruptive = True
   - networking = False
   - run_with_gemini = False
+- disrupt_serial_restart_elected_topology_coordinator:
+  - disruptive = True
+  - topology_changes = True
 - disrupt_show_toppartitions:
   - disruptive = False
   - kubernetes = True
@@ -301,6 +330,7 @@
   - disruptive = True
   - kubernetes = True
   - limited = True
+  - zero_node_changes = True
 - disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back:
   - disruptive = True
   - config_changes = True
@@ -308,6 +338,7 @@
   - disruptive = True
   - kubernetes = False
   - topology_changes = True
+  - zero_node_changes = True
 - disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   - disruptive = True
   - kubernetes = True
@@ -341,6 +372,11 @@
 - disrupt_truncate_large_partition:
   - disruptive = False
   - kubernetes = True
+  - free_tier_set = True
+- disrupt_truncate_perf:
+  - disruptive = False
+  - kubernetes = True
+  - limited = True
   - free_tier_set = True
 - disrupt_validate_hh_short_downtime:
   - disruptive = True
