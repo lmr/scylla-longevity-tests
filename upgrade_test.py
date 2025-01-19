@@ -41,7 +41,6 @@ from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
     get_node_supported_sstable_versions,
-    is_enterprise,
     get_node_enabled_sstable_version
 )
 from sdcm.sct_events.system import InfoEvent
@@ -432,25 +431,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         new_ver = result.stdout.strip()
 
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
-        result = node.remoter.run('sudo find /var/lib/scylla/data/system')
-        snapshot_name = re.findall(r"system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
-        # cmd = (
-        #     r"DIR='/var/lib/scylla/data/system'; "
-        #     r"for i in `sudo ls $DIR`; do "
-        #     r"    sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; "
-        #     r"done" % (snapshot_name[0], snapshot_name[0]))
 
-        # recover the system tables - if it's downgrade from enterprise to OSS
-        if (self.params.get('recover_system_tables') or
-                (is_enterprise(orig_ver) and not is_enterprise(new_ver))):
-            node.remoter.send_files('./data_dir/recover_system_tables.sh', '/tmp/')
-            node.remoter.run('bash /tmp/recover_system_tables.sh %s' % snapshot_name[0], verbose=True)
-        if self.params.get('test_sst3'):
-            node.remoter.run(
-                r'sudo sed -i -e "s/enable_sstables_mc_format:/#enable_sstables_mc_format:/g" /etc/scylla/scylla.yaml')
-        if self.params.get('test_upgrade_from_installed_3_1_0'):
-            node.remoter.run(
-                r'sudo sed -i -e "s/enable_3_1_0_compatibility_mode:/#enable_3_1_0_compatibility_mode:/g" /etc/scylla/scylla.yaml')
         node.drop_raft_property()
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726

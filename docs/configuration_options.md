@@ -2652,33 +2652,6 @@ Upgrade system packages on nodes before upgrading Scylla. Enabled by default
 **type:** boolean
 
 
-## **test_sst3** / SCT_TEST_SST3
-
-
-
-**default:** N/A
-
-**type:** boolean
-
-
-## **test_upgrade_from_installed_3_1_0** / SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0
-
-Enable an option for installed 3.1.0 for work around a scylla issue if it's true
-
-**default:** N/A
-
-**type:** boolean
-
-
-## **recover_system_tables** / SCT_RECOVER_SYSTEM_TABLES
-
-
-
-**default:** N/A
-
-**type:** boolean
-
-
 ## **stress_cmd_1** / SCT_STRESS_CMD_1
 
 cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list

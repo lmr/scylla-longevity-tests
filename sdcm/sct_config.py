@@ -1322,15 +1322,6 @@ class SCTConfiguration(dict):
         dict(name="upgrade_node_system", env="SCT_UPGRADE_NODE_SYSTEM", type=boolean,
              help="Upgrade system packages on nodes before upgrading Scylla. Enabled by default"),
 
-        dict(name="test_sst3", env="SCT_TEST_SST3", type=boolean,
-             help=""),
-
-        dict(name="test_upgrade_from_installed_3_1_0", env="SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0", type=boolean,
-             help="Enable an option for installed 3.1.0 for work around a scylla issue if it's true"),
-
-        dict(name="recover_system_tables", env="SCT_RECOVER_SYSTEM_TABLES", type=boolean,
-             help=""),
-
         dict(name="stress_cmd_1", env="SCT_STRESS_CMD_1", type=str_or_list,
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
