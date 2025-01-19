@@ -81,7 +81,7 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
                             ' using timeout 5m'
         return count_pk_rows_cmd
 
-    def collect_partitions_info(self, ignore_limit_rows_number: bool = False) -> dict | None:
+    def collect_partitions_info(self, ignore_limit_rows_number: bool = False) -> dict[int, int] | None:
         # Get and save how many rows in each partition.
         # It may be used for validation data in the end of test.
         # By default, the count is limited to partitions_attributes.limit_rows_number (if exist),
@@ -148,27 +148,39 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
         only the first 600,000 rows of each partition will be validation during health-checks.
         By default, there is no limit, only when it is specified in yaml by: data_validation - limit_rows_number.
         """
-        if self.validate_partitions and self.partitions_dict_before:
-            LOGGER.debug('Validate partitions info')
-            partitions_dict_after = self.collect_partitions_info(ignore_limit_rows_number=ignore_limit_rows_number)
-            if partitions_dict_after is not None:
-                if not ignore_limit_rows_number and self.limit_rows_number:
-                    missing_rows = {key: val for key, val in partitions_dict_after.items() if
-                                    val < self.limit_rows_number}
-                    if missing_rows:
-                        PartitionRowsValidationEvent(
-                            message=f"Found missing rows for partitions: {missing_rows}",
-                            severity=Severity.CRITICAL).publish()
-                        return
-                elif partitions_dict_after != self.partitions_dict_before:
-                    PartitionRowsValidationEvent(
-                        message=f"Row amount in partitions is not same before and after running of nemesis: {partitions_dict_after}",
-                        severity=Severity.CRITICAL).publish()
-                    return
+        if not self.validate_partitions or not self.partitions_dict_before:
+            return
 
+        LOGGER.debug('Validate partitions info')
+
+        partitions_dict_after = self.collect_partitions_info(ignore_limit_rows_number=ignore_limit_rows_number)
+        if partitions_dict_after is None:
+            return
+
+        if not ignore_limit_rows_number and self.limit_rows_number:
+            missing_rows = {key: val for key, val in partitions_dict_after.items() if
+                            val < self.limit_rows_number}
+            if missing_rows:
                 PartitionRowsValidationEvent(
-                    message="Partition rows number is validated.",
-                    severity=Severity.NORMAL).publish()
+                    message=f"Found missing rows for partitions: {missing_rows}",
+                    severity=Severity.CRITICAL).publish()
+                return
+        elif partitions_dict_after != self.partitions_dict_before:
+            diff = {}
+            for key, val in self.partitions_dict_before.items():
+                diff_val = partitions_dict_after.get(key, 0) - val
+                if diff_val > 0:
+                    diff[key] = "+" + diff_val
+                elif diff_val < 0:
+                    diff[key] = str(diff_val)
+            PartitionRowsValidationEvent(
+                message=f"Row amount in partitions is not same before and after running of nemesis, difference(after-before): {diff}",
+                severity=Severity.CRITICAL).publish()
+            return
+
+        PartitionRowsValidationEvent(
+            message="Partition rows number is validated.",
+            severity=Severity.NORMAL).publish()
 
 
 def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
