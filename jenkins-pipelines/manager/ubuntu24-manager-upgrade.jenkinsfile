@@ -10,7 +10,7 @@ managerPipeline(
     target_manager_version: 'master_latest',
 
     // Upgrade from latest patch release
-    manager_version: '3.3.1',
+    manager_version: '3.4.0',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/ubuntu24.yaml"]''',
