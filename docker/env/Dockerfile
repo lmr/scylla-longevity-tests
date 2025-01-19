@@ -46,6 +46,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         rsync \
         sudo \
         unzip \
+        zstd \
         wget \
         psmisc \
         procps \

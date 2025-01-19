@@ -20,7 +20,6 @@ import shutil
 import fnmatch
 import logging
 import datetime
-import tarfile
 import tempfile
 import traceback
 from collections import OrderedDict
@@ -686,9 +685,9 @@ class LogCollector:
         pass
 
     def _compress_file(self, src_path: str, src_name: str) -> str:  # pylint: disable=no-self-use
-        archive_name = f"{src_name}.tar.gz"
-        with tarfile.open(archive_name, "w:gz") as tar:
-            tar.add(src_path, arcname=src_name)
+        archive_name = f"{src_name}.tar.zst"
+        LocalCmdRunner().run(cmd=f"tar --zstd -cf {archive_name} -C {os.path.dirname(src_path)} {src_name}")
+
         return archive_name
 
     def archive_to_tarfile(self, src_path: str, add_test_id_to_archive: bool = False) -> str:
@@ -1068,7 +1067,7 @@ class PythonSCTLogCollector(BaseSCTLogCollector):
             runner.run(
                 f"bash {os.path.join(os.path.dirname(__file__), 'log_archive.sh')} "
                 f"{src_path} {self.too_big_log_size} {src_name}")
-            res = runner.run(f"ls *{src_name}.gz")
+            res = runner.run(f"ls *{src_name}.zst")
             return res.stdout.rstrip("\n").split("\n")
 
     def create_archive_and_upload(self) -> list[str]:
@@ -1666,6 +1665,8 @@ def check_archive(remoter, path: str) -> bool:
 
     if path.endswith(".tar.gz"):
         cmd = f"tar tzf '{path}'"
+    elif path.endswith(".tar.zst"):
+        cmd = f"tar --zstd -tf '{path}'"
     elif path.endswith(".zip"):
         cmd = f"unzip -qql '{path}'"
     elif path.endswith(".gz"):

@@ -9,6 +9,6 @@ do
   for (( i=1; i<=lines; i+=lines_part))
   do
     start_time=$(sed -n "${i}p" $1 | awk '{print $2,$3}' | sed -e 's/t://g;s/ /__/g;s/-/_/g;s/:/_/g;s/,/_/g;')
-    tail -n "+$i" "$1" | head -n "$lines_part"  | gzip > "${start_time}.$3.gz"
+    tail -n "+$i" "$1" | head -n "$lines_part" | zstd -o "${start_time}.$3.zst"
   done
 done
