@@ -1328,15 +1328,6 @@ class SCTConfiguration(dict):
         dict(name="upgrade_node_system", env="SCT_UPGRADE_NODE_SYSTEM", type=boolean,
              help="Upgrade system packages on nodes before upgrading Scylla. Enabled by default"),
 
-        dict(name="test_sst3", env="SCT_TEST_SST3", type=boolean,
-             help=""),
-
-        dict(name="test_upgrade_from_installed_3_1_0", env="SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0", type=boolean,
-             help="Enable an option for installed 3.1.0 for work around a scylla issue if it's true"),
-
-        dict(name="recover_system_tables", env="SCT_RECOVER_SYSTEM_TABLES", type=boolean,
-             help=""),
-
         dict(name="stress_cmd_1", env="SCT_STRESS_CMD_1", type=str_or_list,
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
@@ -1858,6 +1849,7 @@ class SCTConfiguration(dict):
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         super().__init__()
         self.scylla_version = None
+        self.scylla_version_upgrade_target = None
         self.is_enterprise = False
 
         self.log = logging.getLogger(__name__)
@@ -2465,6 +2457,7 @@ class SCTConfiguration(dict):
             if not self.get('target_upgrade_version'):
                 self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
             scylla_version = get_branch_version(new_scylla_repo, full_version=True)
+            self.scylla_version_upgrade_target = scylla_version
             self.update_argus_with_version(scylla_version, "scylla-server-upgrade-target")
 
     def _check_unexpected_sct_variables(self):

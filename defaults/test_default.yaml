@@ -135,10 +135,7 @@ cassandra_stress_threads: 1000
 new_scylla_repo: ''
 new_version: ''
 upgrade_node_packages: ''
-test_sst3: false
-recover_system_tables: false
 scylla_version: ''
-test_upgrade_from_installed_3_1_0: false
 target_upgrade_version: ''
 disable_raft: true
 enable_tablets_on_upgrade: false
