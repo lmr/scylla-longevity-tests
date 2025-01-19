@@ -41,6 +41,7 @@ from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
     get_node_supported_sstable_versions,
+    ComparableScyllaVersion,
     is_enterprise,
     get_node_enabled_sstable_version
 )
@@ -221,7 +222,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         if self.params.get("enable_tablets_on_upgrade"):
             scylla_yaml_updates.update({"enable_tablets": True})
-
+        version = ComparableScyllaVersion(self.scylla_version)
+        if self.is_enterprise and version >= "2025.1.0~dev" or not self.is_enterprise and version >= "6.3.0~dev":
+            scylla_yaml_updates.update({"experimental_features": ["views-with-tablets"]})
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
 

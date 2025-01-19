@@ -737,7 +737,8 @@ Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'
 
 ## **experimental_features** / SCT_EXPERIMENTAL_FEATURES
 
-unlock specified experimental features
+Unlock specified experimental features. The 'views-with-tablets` feature is enabled in the default configuration, but it should not be enabled when testing versions older than 2025.1-dev or 6.3-dev
+
 
 **default:** N/A
 

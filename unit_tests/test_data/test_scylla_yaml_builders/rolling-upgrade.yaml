@@ -37,6 +37,8 @@ authenticator_password: 'cassandra'
 
 use_mgmt: false
 
+experimental_features: []
+
 gemini_cmd: "gemini -d --duration 2h \
 -c 10 -m write -f --non-interactive --cql-features normal \
 --max-mutation-retries 5 --max-mutation-retries-backoff 500ms \

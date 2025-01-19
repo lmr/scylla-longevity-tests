@@ -15,7 +15,7 @@
     }
   ],
   "broadcast_rpc_address": "__NODE_IPV6_ADDRESS__",
-  "experimental_features": [],
+  "experimental_features": ["views-with-tablets"],
   "prometheus_address": "__NODE_IPV6_ADDRESS__",
   "enable_ipv6_dns_lookup": true,
   "alternator_enforce_authorization": false,

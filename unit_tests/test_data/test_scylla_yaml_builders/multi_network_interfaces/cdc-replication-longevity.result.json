@@ -14,7 +14,7 @@
     }
   ],
   "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS_2__",
-  "experimental_features": [],
+  "experimental_features": ["views-with-tablets"],
   "prometheus_address": "0.0.0.0",
   "alternator_enforce_authorization": false,
   "auto_bootstrap": true,

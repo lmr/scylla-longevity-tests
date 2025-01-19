@@ -126,6 +126,7 @@ class ScyllaYamlTest(unittest.TestCase):
                         parameters=[{'seeds': ['1.1.1.1', '2.2.2.2']}]),
                 ],
                 'force_schema_commit_log': True,
+                'experimental_features': None,
             },
             expected_without_defaults={
                 'background_writer_scheduling_quota': 1.0,
@@ -151,6 +152,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'prometheus_prefix': 'someprefix',
                 'log_to_stdout': True,
                 'force_schema_commit_log': True,
+                'experimental_features': None,
             },
             expected_with_defaults={
                 'abort_on_ebadf': None,

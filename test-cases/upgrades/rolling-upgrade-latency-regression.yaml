@@ -47,6 +47,8 @@ nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: false
 use_mgmt: false
 
+experimental_features: []
+
 user_prefix: 'rolling-upgrade-ltncy-rgrssn'
 
 server_encrypt: true
