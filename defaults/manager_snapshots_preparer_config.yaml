@@ -1,0 +1,23 @@
+# Description: This file contains C-S command template and the default values of parameters used in this command.
+# Parameter values (all expect cs_cmd_template) can be overwritten, otherwise, default values defined here will be used.
+# Such a configuration is used by Manager backup snapshots prepare test.
+
+cs_cmd_template: "cassandra-stress {operation} cl={cl} n={num_of_rows} -schema 'keyspace={ks_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads={threads_num} -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}"
+
+operation: "write"
+cl: "QUORUM"
+
+replication: "NetworkTopologyStrategy"
+rf: 3
+compaction: "IncrementalCompactionStrategy"
+
+threads_num: 500
+
+col_size: 1024
+col_n: 1
+
+# Defined in a runtime based on backup size, number of loaders, scylla version, etc
+ks_name: ''
+num_of_rows: ''
+sequence_start: ''
+sequence_end: ''

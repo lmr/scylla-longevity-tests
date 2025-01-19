@@ -1208,7 +1208,12 @@ class SCTConfiguration(dict):
 
         dict(name="mgmt_prepare_snapshot_size",
              env="SCT_MGMT_PREPARE_SNAPSHOT_SIZE", type=int,
-             help="Size of backup snapshot in Gb to be prepared to be prepared for backup"),
+             help="Size of backup snapshot in Gb to be prepared for backup"),
+
+        dict(name="mgmt_snapshots_preparer_params",
+             env="SCT_MGMT_SNAPSHOTS_PREPARER_PARAMS", type=dict_or_str_or_pydantic,
+             help="Custom parameter of c-s write operation used in snapshots preparer."
+                  "The whole list of parameters can be found in defaults/manager_snapshots_preparer_config.yaml"),
 
         # PerformanceRegressionTest
 

@@ -135,6 +135,20 @@ class ManagerBackupReadResult(GenericResultTable):
         ]
 
 
+class ManagerSnapshotDetails(GenericResultTable):
+    class Meta:
+        name = "Snapshot details"
+        description = "Manager snapshots (pre-created for next utilization in restore tests) details"
+        Columns = [
+            ColumnMetadata(name="tag", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="size", unit="GB", type=ResultType.INTEGER),
+            ColumnMetadata(name="bucket", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="ks_name", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="cluster_id", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="scylla_version", unit="", type=ResultType.TEXT),
+        ]
+
+
 workload_to_table = {
     "mixed": LatencyCalculatorMixedResult,
     "write": LatencyCalculatorWriteResult,
@@ -254,4 +268,11 @@ def send_manager_benchmark_results_to_argus(argus_client: ArgusClient, result: d
     result_table = ManagerRestoreBanchmarkResult(sut_timestamp=sut_timestamp)
     for key, value in result.items():
         result_table.add_result(column=key, row=row_name, value=value, status=Status.UNSET)
+    submit_results_to_argus(argus_client, result_table)
+
+
+def send_manager_snapshot_details_to_argus(argus_client: ArgusClient, snapshot_details: dict) -> None:
+    result_table = ManagerSnapshotDetails()
+    for key, value in snapshot_details.items():
+        result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)

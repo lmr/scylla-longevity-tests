@@ -170,11 +170,12 @@ def call(Map pipelineParams) {
                    name: 'requested_by_user')
             text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
                  description: (
-                     'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
-                     'Example:\n' +
-                     '\tSCT_MGMT_RESTORE_EXTRA_PARAMS=--batch-size 50 --parallel 0\n' +
-                     '\tSCT_N_DB_NODES=6' +
-                     '\tSCT_MGMT_SKIP_POST_RESTORE_STRESS_READ=true\n'
+                     """Extra environment variables to be set in the test environment, uses the java Properties File Format.
+                        Example:
+                        SCT_MGMT_RESTORE_EXTRA_PARAMS=--batch-size 50 --parallel 0
+                        SCT_N_DB_NODES=6
+                        SCT_MGMT_SKIP_POST_RESTORE_STRESS_READ=true
+                        SCT_MGMT_SNAPSHOTS_PREPARER_PARAMS={'compaction': 'SizeTieredCompactionStrategy', 'rf': 3}"""
                      ),
                  name: 'extra_environment_variables')
         }

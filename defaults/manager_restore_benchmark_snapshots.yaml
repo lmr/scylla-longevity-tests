@@ -1,110 +1,164 @@
 bucket: "manager-backup-tests-permanent-snapshots-us-east-1"
-cs_read_cmd_template: "cassandra-stress read cl=ONE n={num_of_rows} -schema 'keyspace={keyspace_name} replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq={sequence_start}..{sequence_end}"
+cs_read_cmd_template: "cassandra-stress read cl={cl} n={num_of_rows} -schema 'keyspace={keyspace_name} replication(strategy={replication},replication_factor={rf}) compaction(strategy={compaction})' -mode cql3 native -rate threads=500 -col 'size=FIXED({col_size}) n=FIXED({col_n})' -pop seq={sequence_start}..{sequence_end}"
 sizes:  # size of backed up dataset in GB
   1gb_1t_ics:
     tag: "sm_20240812100424UTC"
-    schema:
-      keyspace1:
-        - standard1: 1
-    number_of_rows: 1073760
     exp_timeout: 1200  # 20 minutes (timeout for restore data operation)
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
-    compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
+    dataset:
+      schema:
+        keyspace1:
+          - standard1: 1
+      num_of_rows: 1073760
+      compaction: "IncrementalCompactionStrategy"
+      cl: "ONE"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
   500gb_1t_ics:
     tag: "sm_20240813112034UTC"
-    schema:
-      keyspace1:
-        - standard1: 500
-    number_of_rows: 524288000
     exp_timeout: 14400  # 4 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
-    compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
+    dataset:
+      schema:
+        keyspace1:
+          - standard1: 500
+      num_of_rows: 524288000
+      compaction: "IncrementalCompactionStrategy"
+      cl: "ONE"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
   500gb_1t_ics_tablets:
     tag: "sm_20240813114617UTC"
-    schema:
-      keyspace1:
-        - standard1: 500
-    number_of_rows: 524288000
     exp_timeout: 14400  # 4 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
-    compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
+    dataset:
+      schema:
+        keyspace1:
+          - standard1: 500
+      num_of_rows: 524288000
+      compaction: "IncrementalCompactionStrategy"
+      cl: "ONE"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
   500gb_2t_ics:
     tag: "sm_20240819203428UTC"
-    schema:
-      keyspace1:
-        - standard1: 250
-      keyspace2:
-        - standard1: 250
-    number_of_rows: 524288000
     exp_timeout: 14400  # 4 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
-    compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: true
+    dataset:
+      schema:
+        keyspace1:
+          - standard1: 250
+        keyspace2:
+          - standard1: 250
+      num_of_rows: 524288000
+      compaction: "IncrementalCompactionStrategy"
+      cl: "ONE"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
   1tb_1t_ics:
     tag: "sm_20240814180009UTC"
-    schema:
-      keyspace1:
-        - standard1: 1024
-    number_of_rows: 1073741824
     exp_timeout: 28800  # 8 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
-    compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
+    dataset:
+      schema:
+        keyspace1:
+          - standard1: 1024
+      num_of_rows: 1073741824
+      compaction: "IncrementalCompactionStrategy"
+      cl: "ONE"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
   1tb_4t_twcs:
     tag: "sm_20240821145503UTC"
-    schema:
-      keyspace1:
-        - t_10gb: 10
-        - t_90gb: 90
-        - t_300gb: 300
-        - t_600gb: 600
-    number_of_rows: 428571429
     exp_timeout: 28800  # 8 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
-    compaction_strategy: "TimeWindowCompactionStrategy"
     prohibit_verification_read: true
+    dataset:
+      schema:
+        keyspace1:
+          - t_10gb: 10
+          - t_90gb: 90
+          - t_300gb: 300
+          - t_600gb: 600
+      num_of_rows: 428571429
+      compaction: "TimeWindowCompactionStrategy"
+      cl:
+      col_size:
+      col_n:
+      replication: "NetworkTopologyStrategy"
+      rf: 3
   1tb_2t_twcs:
     tag: "sm_20240827191125UTC"
-    schema:
-      keyspace1:
-        - t_300gb: 300
-        - t_700gb: 700
-    number_of_rows: 428571429
     exp_timeout: 28800  # 8 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 9
-    compaction_strategy: "TimeWindowCompactionStrategy"
     prohibit_verification_read: true
+    dataset:
+      schema:
+        keyspace1:
+          - t_300gb: 300
+          - t_700gb: 700
+      num_of_rows: 428571429
+      compaction: "TimeWindowCompactionStrategy"
+      cl:
+      col_size:
+      col_n:
+      replication: "NetworkTopologyStrategy"
+      rf: 3
   1.5tb_2t_ics:
     tag: "sm_20240820180152UTC"
-    schema:
-      keyspace1:
-        - standard1: 500
-      keyspace2:
-        - standard1: 1024
-    number_of_rows: 1598029824
     exp_timeout: 43200  # 12 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
-    compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: true
+    dataset:
+      schema:
+        keyspace1:
+          - standard1: 500
+        keyspace2:
+          - standard1: 1024
+      num_of_rows: 1598029824
+      compaction: "IncrementalCompactionStrategy"
+      cl: "ONE"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
   2tb_1t_ics:
     tag: "sm_20240816185129UTC"
-    schema:
-      keyspace1:
-        - standard1: 2048
-    number_of_rows: 2147483648
     exp_timeout: 57600  # 16 hours
     scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
-    compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
+    dataset:
+      schema:
+        keyspace1:
+          - standard1: 2048
+      num_of_rows: 2147483648
+      compaction: "IncrementalCompactionStrategy"
+      cl: "ONE"
+      col_size: 1024
+      col_n: 1
+      replication: "NetworkTopologyStrategy"
+      rf: 3
