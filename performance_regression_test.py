@@ -568,6 +568,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         """
 
         base_cmd_m = self.params.get('stress_cmd_m')
+        if isinstance(base_cmd_m, list):
+            base_cmd_m = base_cmd_m[0]
         stress_multiplier = self.params.get('stress_multiplier')
         if stress_multiplier_m := self.params.get("stress_multiplier_m"):
             stress_multiplier = stress_multiplier_m
