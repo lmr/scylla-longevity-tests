@@ -19,8 +19,8 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 
 
-CHECK_NODE_HEALTH_RETRIES = 3
-CHECK_NODE_HEALTH_RETRY_DELAY = 45
+CHECK_NODE_HEALTH_RETRIES = 10
+CHECK_NODE_HEALTH_RETRY_DELAY = 15
 
 LOGGER = logging.getLogger(__name__)
 
