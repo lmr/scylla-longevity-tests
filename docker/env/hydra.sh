@@ -155,7 +155,7 @@ if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
 fi
 
 # if running on Build server
-if [[ ${USER} == "jenkins" ]]; then
+if [[ ${USER} == "jenkins" || ${USER} == "runner" ]]; then
     echo "Running on Build Server..."
     HOST_NAME=`hostname`
 else
@@ -173,7 +173,7 @@ else
   die "Please make sure you install either podman or docker on this machine to run hydra"
 fi
 
-if [[ ${USER} == "jenkins" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+if [[ ${USER} == "jenkins" || ${USER} == "runner" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
     echo "Pull version $VERSION from Docker Hub..."
     $tool pull ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}
 else
@@ -190,19 +190,19 @@ fi
 DOCKER_ADD_HOST_ARGS=()
 
 # export all SCT_* env vars into the docker run
-SCT_OPTIONS=$(env | sed -n 's/^\(SCT_[^=]\+\)=.*/--env \1/p')
+SCT_OPTIONS=$(env | sed -n 's/\(SCT_.*\)=.*/--env \1/p')
 
 # export all PYTEST_* env vars into the docker run
-PYTEST_OPTIONS=$(env | sed -n 's/^\(PYTEST_[^=]\+\)=.*/--env \1/p')
+PYTEST_OPTIONS=$(env | sed -n 's/\(PYTEST_.*\)=.*/--env \1/p')
 
 # export all BUILD_* env vars into the docker run
-BUILD_OPTIONS=$(env | sed -n 's/^\(BUILD_[^=]\+\)=.*/--env \1/p')
+BUILD_OPTIONS=$(env | sed -n 's/\(BUILD_.*\)=.*/--env \1/p')
 
 # export all AWS_* env vars into the docker run
-AWS_OPTIONS=$(env | sed -n 's/^\(AWS_[^=]\+\)=.*/--env \1/p')
+AWS_OPTIONS=$(env | sed -n 's/\(AWS_.*\)=.*/--env \1/p')
 
 # export all JENKINS_* env vars into the docker run
-JENKINS_OPTIONS=$(env | sed -n 's/^\(JENKINS_[^=]\+\)=.*/--env \1/p')
+JENKINS_OPTIONS=$(env | sed -n 's/\(JENKINS_.*\)=.*/--env \1/p')
 
 is_podman="$($tool --help | { grep -o podman || :; })"
 docker_common_args=()

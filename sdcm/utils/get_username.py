@@ -41,7 +41,7 @@ def get_username() -> str:  # pylint: disable=too-many-return-statements  # noqa
         return user_id
 
     current_linux_user = getpass.getuser()
-    if current_linux_user == "jenkins":
+    if current_linux_user in ["jenkins", "runner"]:
         return current_linux_user
     if current_linux_user == "ubuntu":
         return "sct-runner"
