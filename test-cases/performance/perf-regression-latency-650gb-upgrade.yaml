@@ -39,3 +39,4 @@ use_placement_group: true
 email_subject_postfix: 'latency during upgrades'
 
 cluster_health_check: false
+hinted_handoff: 'enabled'
