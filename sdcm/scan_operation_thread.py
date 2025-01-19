@@ -11,11 +11,13 @@ from pathlib import Path
 from abc import abstractmethod
 from string import Template
 from typing import Optional, Type, NamedTuple, TYPE_CHECKING
+from contextlib import contextmanager
 
 from pytz import utc
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
 from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.policies import ExponentialBackoffRetryPolicy
 
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
@@ -106,6 +108,10 @@ class FullscanOperationBase:
         self.db_node = self._get_random_node()
         self.current_operation_stat = None
         self.log.info("FullscanOperationBase init finished")
+        self._exp_backoff_retry_policy_params = {
+            "max_num_retries": 15.0, "min_interval": 1.0, "max_interval": 1800.0
+        }
+        self._request_default_timeout = 1800
 
     def _get_random_node(self) -> BaseNode:
         return self.generator.choice(self.fullscan_params.db_cluster.data_nodes)
@@ -141,11 +147,7 @@ class FullscanOperationBase:
                 cmd=cmd
             )
 
-            with self.fullscan_params.db_cluster.cql_connection_patient(
-                    node=self.db_node,
-                    connect_timeout=300,
-                    user=self.fullscan_params.user,
-                    password=self.fullscan_params.user_password) as session:
+            with self.cql_connection(connect_timeout=300) as session:
                 try:
                     scan_op_event.message = ''
                     start_time = time.time()
@@ -190,6 +192,18 @@ class FullscanOperationBase:
             result.fetch_next_page()
             if read_pages > 0:
                 pages += 1
+
+    @contextmanager
+    def cql_connection(self, **kwargs):
+        node = kwargs.pop("node", self.db_node)
+        with self.fullscan_params.db_cluster.cql_connection_patient(
+                node=node,
+                user=self.fullscan_params.user,
+                password=self.fullscan_params.user_password, **kwargs) as session:
+            session.cluster.default_retry_policy = ExponentialBackoffRetryPolicy(
+                **self._exp_backoff_retry_policy_params)
+            session.default_timeout = self._request_default_timeout
+            yield session
 
 
 class FullScanOperation(FullscanOperationBase):
@@ -239,7 +253,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
     def get_table_clustering_order(self) -> str:
         node = self._get_random_node()
         try:
-            with self.fullscan_params.db_cluster.cql_connection_patient(node=node, connect_timeout=300) as session:
+            with self.cql_connection(node=node, connect_timeout=300) as session:
                 # Using CL ONE. No need for a quorum since querying a constant fixed attribute of a table.
                 session.default_consistency_level = ConsistencyLevel.ONE
                 return get_table_clustering_order(ks_cf=self.fullscan_params.ks_cf,
@@ -264,8 +278,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
         """
         db_node = self._get_random_node()
 
-        with self.fullscan_params.db_cluster.cql_connection_patient(
-                node=db_node, connect_timeout=300) as session:
+        with self.cql_connection(node=db_node, connect_timeout=300) as session:
             ck_random_min_value = self.generator.randint(a=1, b=self.fullscan_params.rows_count)
             ck_random_max_value = self.generator.randint(a=ck_random_min_value, b=self.fullscan_params.rows_count)
             self.ck_filter = ck_filter = self.generator.choice(list(self.reversed_query_filter_ck_by.keys()))
