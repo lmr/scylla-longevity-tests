@@ -20,10 +20,19 @@ ADD requirements.txt .
 RUN pip install uv==0.2.24
 RUN uv pip install --system -r requirements.txt
 
-FROM python:$PYTHON_IMAGE_TAG
+# Download, extract and install Kubernetes packages.
+FROM apt_base AS k8_packages
 ARG KUBECTL_VERSION=1.27.3
 ARG EKSCTL_VERSION=0.165.0
 ARG HELM_VERSION=3.12.2
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl tar
+RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl
+RUN curl --silent --location "https://github.com/eksctl-io/eksctl/releases/download/v$EKSCTL_VERSION/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && \
+    mv /tmp/eksctl /usr/local/bin
+RUN curl --silent --location  "https://get.helm.sh/helm-v$HELM_VERSION-linux-amd64.tar.gz" | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin
+
+#Final image.
+FROM python:$PYTHON_IMAGE_TAG
 ENV PYTHONWARNINGS="ignore:unclosed ignore::SyntaxWarning" \
     PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
@@ -53,9 +62,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         docker-compose-plugin && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl && \
-    chmod +x /usr/local/bin/kubectl
-RUN curl --silent --location "https://github.com/eksctl-io/eksctl/releases/download/v$EKSCTL_VERSION/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && \
-    mv /tmp/eksctl /usr/local/bin
-RUN curl --silent --location  "https://get.helm.sh/helm-v$HELM_VERSION-linux-amd64.tar.gz" | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin
 COPY --from=python_packages /usr/local /usr/local
+# TODO: make this layer optional in the future - only for Kubernetes development/tests.
+COPY --from=k8_packages --chmod=755 /usr/local/bin/kubectl /usr/local/bin/eksctl /usr/local/bin/helm /usr/local/bin/
