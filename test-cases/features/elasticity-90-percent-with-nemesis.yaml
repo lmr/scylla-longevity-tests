@@ -1,0 +1,35 @@
+test_duration: 3000
+
+prepare_write_cmd:
+  - "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..78125000"
+  - "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=78125001..156250000"
+  - "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=156250001..234375000"
+  - "cassandra-stress write no-warmup cl=ALL n=78125000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=234375001..312500000"
+
+stress_cmd:
+  - "cassandra-stress read no-warmup cl=QUORUM duration=2400m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=200 fixed=3000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..162500000,81250000,1625000)'"
+  - "cassandra-stress write no-warmup cl=ONE duration=2400m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=1 fixed=10/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..162500000,81250000,102500)'"
+
+pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 64};"
+
+n_db_nodes: 3
+nemesis_add_node_cnt: 3
+n_loaders: 4
+n_monitor_nodes: 1
+nemesis_grow_shrink_instance_type: 'i4i.large'
+
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i4i.large'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ['elasticity']
+nemesis_seed: '019'
+nemesis_interval: 5
+nemesis_during_prepare: false
+
+user_prefix: 'elasticity-test-nemesis'
+space_node_threshold: 6442450
+ami_id_db_scylla_desc: 'VERSION_DESC'
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
