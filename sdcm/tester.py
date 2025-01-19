@@ -315,101 +315,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def k8s_cluster(self):
         return self.k8s_clusters[0] if getattr(self, 'k8s_clusters', None) else None
 
-    def __init__(self, *args, **kwargs):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
-        super().__init__(*args)
+    def __init__(self, methodName='runTest'):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
         self.result = None
-        self._results = []
-        self.status = "RUNNING"
-        self.start_time = time.time()
-        self.teardown_started = False
-        self._init_params()
-        reuse_cluster_id = self.params.get('reuse_cluster')
-        if reuse_cluster_id:
-            self.test_config.reuse_cluster(True)
-            self.test_config.set_test_id(reuse_cluster_id)
-        else:
-            # Test id is set by Hydra or generated if running without Hydra
-            self.test_config.set_test_id(self.params.get('test_id') or uuid4())
-        self.test_config.set_test_name(self.id())
-        self.test_config.set_tester_obj(self)
-        self._init_logging()
-        RemoteCmdRunnerBase.set_default_ssh_transport(self.params.get('ssh_transport'))
-
-        self._profile_factory = None
-        if self.params.get('enable_test_profiling'):
-            self._profile_factory = ProfilerFactory(os.path.join(self.logdir, 'profile.stats'))
-            self._profile_factory.activate()
-
-        ip_ssh_connections = ssh_connection_ip_type(self.params)
-        self.test_config.set_ip_ssh_connections(ip_ssh_connections)
-        self._init_test_duration()
-        post_behavior_db_nodes = self.params.get('post_behavior_db_nodes')
-        self.log.debug('Post behavior for db nodes %s', post_behavior_db_nodes)
-        self.test_config.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
-        post_behavior_monitor_nodes = self.params.get('post_behavior_monitor_nodes')
-        self.log.debug('Post behavior for monitor nodes %s', post_behavior_monitor_nodes)
-        self.test_config.keep_cluster(node_type='monitor_nodes', val=post_behavior_monitor_nodes)
-        post_behavior_loader_nodes = self.params.get('post_behavior_loader_nodes')
-        self.log.debug('Post behavior for loader nodes %s', post_behavior_loader_nodes)
-        self.test_config.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
-        self.test_config.set_duration(self._duration)
-        cluster_backend = self.params.get('cluster_backend')
-        if cluster_backend in ('aws', 'k8s-eks'):
-            self.test_config.set_multi_region(
-                (self.params.get("simulated_regions") or 0) > 1 or len(self.params.region_names) > 1)
-        elif cluster_backend in ('gce', 'k8s-gke'):
-            self.test_config.set_multi_region(
-                (self.params.get("simulated_regions") or 0) > 1 or len(self.params.gce_datacenters) > 1)
-        elif cluster_backend == "azure":
-            self.test_config.set_multi_region((self.params.get("simulated_regions") or 0) > 1)
-
-        if self.params.get("backup_bucket_backend") == "azure":
-            self.test_config.set_backup_azure_blob_credentials()
-
-        self.test_config.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
-        if self.test_config.BACKTRACE_DECODING:
-            self.test_config.set_decoding_queue()
-        self.test_config.set_intra_node_comm_public(self.params.get(
-            'intra_node_comm_public'))
-
-        # for saving test details in DB
-        self.create_stats = self.params.get(key='store_perf_results')
-        self.scylla_dir = SCYLLA_DIR
-        self.left_processes_log = os.path.join(self.logdir, 'left_processes.log')
-        self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
-        self._logs = {}
-        self.timeout_thread = None
-        self.email_reporter = build_reporter(self.__class__.__name__,
-                                             self.params.get('email_recipients'),
-                                             self.logdir)
-
-        self.init_argus_run()
-        self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
-        PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
-        self.localhost = self._init_localhost()
-
-        if self.params.get("logs_transport") == 'syslog-ng':
-            self.test_config.configure_syslogng(self.localhost)
-
-        self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
-        self.alternator = alternator.api.Alternator(sct_params=self.params)
-
-        if self.params.get("use_ldap"):
-            self._init_ldap()
-
-        self.partitions_attrs: PartitionsValidationAttributes | None = self._init_data_validation()
-        # Cover multi-tenant configuration. Prevent event device double initiate
-        start_events_device(log_dir=self.logdir,
-                            _registry=getattr(self, "_registry", None) or self.events_processes_registry)
-        enable_default_filters(sct_config=self.params)
-
-        self.skip_test_stages = defaultdict(lambda: False, self.params.get('skip_test_stages') or {})
-
-        time.sleep(0.5)
-        InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
-        self.bisect_ref_value = None
-        self.bisect_result_value = None
-        self.stress_cmd = self.params.get('stress_cmd')
+        super().__init__(methodName=methodName)
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get('stress_duration')
@@ -945,7 +853,100 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @teardown_on_exception
     @log_run_info
-    def setUp(self):  # pylint: disable=too-many-branches,too-many-statements
+    def setUp(self):  # pylint: disable=too-many-branches,too-many-statements  # noqa: PLR0912, PLR0915
+        self._results = []
+        self.status = "RUNNING"
+        self.start_time = time.time()
+        self.teardown_started = False
+        self._init_params()
+        reuse_cluster_id = self.params.get('reuse_cluster')
+        if reuse_cluster_id:
+            self.test_config.reuse_cluster(True)
+            self.test_config.set_test_id(reuse_cluster_id)
+        else:
+            # Test id is set by Hydra or generated if running without Hydra
+            self.test_config.set_test_id(self.params.get('test_id') or uuid4())
+        self.test_config.set_test_name(self.id())
+        self.test_config.set_tester_obj(self)
+        self._init_logging()
+        RemoteCmdRunnerBase.set_default_ssh_transport(self.params.get('ssh_transport'))
+
+        self._profile_factory = None
+        if self.params.get('enable_test_profiling'):
+            self._profile_factory = ProfilerFactory(os.path.join(self.logdir, 'profile.stats'))
+            self._profile_factory.activate()
+
+        ip_ssh_connections = ssh_connection_ip_type(self.params)
+        self.test_config.set_ip_ssh_connections(ip_ssh_connections)
+        self._init_test_duration()
+        post_behavior_db_nodes = self.params.get('post_behavior_db_nodes')
+        self.log.debug('Post behavior for db nodes %s', post_behavior_db_nodes)
+        self.test_config.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
+        post_behavior_monitor_nodes = self.params.get('post_behavior_monitor_nodes')
+        self.log.debug('Post behavior for monitor nodes %s', post_behavior_monitor_nodes)
+        self.test_config.keep_cluster(node_type='monitor_nodes', val=post_behavior_monitor_nodes)
+        post_behavior_loader_nodes = self.params.get('post_behavior_loader_nodes')
+        self.log.debug('Post behavior for loader nodes %s', post_behavior_loader_nodes)
+        self.test_config.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
+        self.test_config.set_duration(self._duration)
+        cluster_backend = self.params.get('cluster_backend')
+        if cluster_backend in ('aws', 'k8s-eks'):
+            self.test_config.set_multi_region(
+                (self.params.get("simulated_regions") or 0) > 1 or len(self.params.region_names) > 1)
+        elif cluster_backend in ('gce', 'k8s-gke'):
+            self.test_config.set_multi_region(
+                (self.params.get("simulated_regions") or 0) > 1 or len(self.params.gce_datacenters) > 1)
+        elif cluster_backend == "azure":
+            self.test_config.set_multi_region((self.params.get("simulated_regions") or 0) > 1)
+
+        if self.params.get("backup_bucket_backend") == "azure":
+            self.test_config.set_backup_azure_blob_credentials()
+
+        self.test_config.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
+        if self.test_config.BACKTRACE_DECODING:
+            self.test_config.set_decoding_queue()
+        self.test_config.set_intra_node_comm_public(self.params.get(
+            'intra_node_comm_public'))
+
+        # for saving test details in DB
+        self.create_stats = self.params.get(key='store_perf_results')
+        self.scylla_dir = SCYLLA_DIR
+        self.left_processes_log = os.path.join(self.logdir, 'left_processes.log')
+        self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
+        self._logs = {}
+        self.timeout_thread = None
+        self.email_reporter = build_reporter(self.__class__.__name__,
+                                             self.params.get('email_recipients'),
+                                             self.logdir)
+
+        self.init_argus_run()
+        self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
+        PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
+        self.localhost = self._init_localhost()
+
+        if self.params.get("logs_transport") == 'syslog-ng':
+            self.test_config.configure_syslogng(self.localhost)
+
+        self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
+        self.alternator = alternator.api.Alternator(sct_params=self.params)
+
+        if self.params.get("use_ldap"):
+            self._init_ldap()
+
+        self.partitions_attrs: PartitionsValidationAttributes | None = self._init_data_validation()
+        # Cover multi-tenant configuration. Prevent event device double initiate
+        start_events_device(log_dir=self.logdir,
+                            _registry=getattr(self, "_registry", None) or self.events_processes_registry)
+        enable_default_filters(sct_config=self.params)
+
+        self.skip_test_stages = defaultdict(lambda: False, self.params.get('skip_test_stages') or {})
+
+        time.sleep(0.5)
+        InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
+        self.bisect_ref_value = None
+        self.bisect_result_value = None
+        self.stress_cmd = self.params.get('stress_cmd')
+
         self.credentials = []
         self.db_cluster = None
 

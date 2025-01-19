@@ -6,7 +6,6 @@ import pytest
 import threading
 from unittest.mock import MagicMock
 
-
 LongevityTest = pytest.mark.skip(reason="we don't need to run those tests")(LongevityTest)
 
 
@@ -26,6 +25,12 @@ def test_test_user_batch_custom_time(params):
         def _pre_create_templated_user_schema(self, *args, **kwargs):
             pass
 
+        def init_resources(self):
+            pass
+
+        def argus_collect_manager_version(self):
+            pass
+
         def _run_all_stress_cmds(self, stress_queue, params):
             for _ in range(len(params['stress_cmd'])):
                 m = MagicMock()
@@ -33,6 +38,7 @@ def test_test_user_batch_custom_time(params):
                 stress_queue.append(m)
 
     test = DummyLongevityTest()
+    test.setUp()
     node = DummyNode(name='test_node',
                      parent_cluster=None,
                      ssh_login_info=dict(key_file='~/.ssh/scylla-test'))

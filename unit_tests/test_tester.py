@@ -39,8 +39,9 @@ class FakeSCTConfiguration(SCTConfiguration):
             'run_commit_log_check_thread': False
         }
 
-
 # pylint: disable=too-many-instance-attributes
+
+
 class ClusterTesterForTests(ClusterTester):
     _sct_log = None
     _final_event = None
@@ -50,7 +51,7 @@ class ClusterTesterForTests(ClusterTester):
     _get_events_grouped_by_category_cached = None
     _unittest_final_event = False
 
-    def __init__(self, *args):
+    def setUp(self):
         self.logdir = tempfile.mkdtemp()
         self.events_processes_registry = EventsProcessesRegistry(log_dir=self.logdir)
         self.events_processes_registry_patcher = \
@@ -66,7 +67,7 @@ class ClusterTesterForTests(ClusterTester):
             },
             variables={'log_dir': self.logdir}
         )
-        super().__init__(*args)
+        super().setUp()
 
     def init_argus_run(self):
         pass

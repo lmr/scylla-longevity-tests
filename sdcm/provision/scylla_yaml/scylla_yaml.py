@@ -15,7 +15,7 @@ from typing import List, Literal, Union
 
 import logging
 import yaml
-from pydantic import validator, BaseModel, Extra  # pylint: disable=no-name-in-module
+from pydantic import validator, BaseModel, ConfigDict  # pylint: disable=no-name-in-module
 
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
     ServerEncryptionOptions, ClientEncryptionOptions
@@ -26,8 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
-    class Config:  # pylint: disable=too-few-public-methods
-        extra = Extra.allow
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     broadcast_address: str = None  # ""
     api_port: int = None  # 10000

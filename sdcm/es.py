@@ -18,7 +18,9 @@ class ES(elasticsearch.Elasticsearch):
 
     @cached_property
     def conf(self):
-        return KeyStore().get_elasticsearch_token()
+        conf_dict = KeyStore().get_elasticsearch_token()
+        conf_dict.pop('kibana_url', None)
+        return conf_dict
 
     def _create_index(self, index):
         self.indices.create(index=index, ignore=400)  # pylint: disable=unexpected-keyword-arg

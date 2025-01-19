@@ -5,7 +5,7 @@ import yaml
 from typing import Optional
 from pathlib import Path
 
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, ConfigDict
 
 from sdcm.utils.distro import Distro
 from sdcm.utils.common import get_sct_root_path
@@ -179,5 +179,4 @@ class AgentBackupParameters(BaseModel):
     transfers: Optional[int] = 2
     low_level_retries: Optional[int] = 20
 
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(arbitrary_types_allowed=False)
