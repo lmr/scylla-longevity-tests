@@ -3138,9 +3138,6 @@ class FillDatabaseData(ClusterTester):
                         truncates.append(truncate)
             else:
                 self.all_verification_items[test_num]['skip_condition'] = False
-        # Sleep a while after creating test tables to avoid schema disagreement.
-        # Refs: https://github.com/scylladb/scylla/issues/5235
-        time.sleep(30)
         for truncate in truncates:
             # timeout was enlarged cause of
             # - https://github.com/scylladb/scylladb/issues/22166
