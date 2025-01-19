@@ -16,4 +16,8 @@ def call(Map params) {
 
         echo " Argus test run created."
     """
+    if (!currentBuild.description) {
+        currentBuild.description = ''
+    }
+    currentBuild.description += "\n<a href='https://argus.scylladb.com/tests/scylla-cluster-tests/${SCT_TEST_ID}'>Argus</a>\n"
 }
